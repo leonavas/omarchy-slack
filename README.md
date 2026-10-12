@@ -68,7 +68,7 @@ All in the bar widget's settings panel, or inline in `~/.config/omarchy/shell.js
 | `specialWorkspace` | `scratchpad` | Used as `special:<name>` |
 | `openInSpecial` | `true` | New slick windows go straight to the special workspace |
 | `autoStart` | `false` | Open slick when the shell starts |
-| `launchForeground` | `false` | Show slick when it opens on its own (a click always shows it) |
+| `launchForeground` | `true` | Show and focus slick when it opens; off, it opens hidden in the scratchpad, also from the icon |
 | `dimWhenClosed` | `true` | |
 | `hideWhenNotRunning` | `false` | |
 | `middleClickCloses` | `true` | |

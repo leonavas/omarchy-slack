@@ -297,3 +297,8 @@ function openArgs(row) {
 function badgeLabel(count) {
   return count > 99 ? "99+" : String(count)
 }
+
+// A Lua string literal, for commands handed to `hyprctl eval`.
+function luaString(text) {
+  return '"' + String(text).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"'
+}

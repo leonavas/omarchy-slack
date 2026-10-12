@@ -39,12 +39,16 @@ past them vertically so the two do not touch. Dots keep the inside placement.
 The Mono icon is the white SVG run through `MultiEffect` colorization, the
 same way the shell's tray tints symbolic icons.
 
-## Clicks that launch
+## Launching
 
-A launch from a click shows the window as soon as it appears, whatever
-`launchForeground` says; that setting is for launches nobody clicked (login,
-a terminal). Without this, "Open in Scratchpad" plus a click would open slick
-hidden.
+Every launch, from a click, the menu or login, follows `launchForeground`.
+It goes through Hyprland with window rules (`hl.exec_cmd(cmd, { workspace =
+"special:scratchpad silent", no_initial_focus = true })` on Lua configs, the
+`[workspace …;noinitialfocus]` prefix on older ones), so a slick meant for the
+background is born in the scratchpad. Moving it there after it appeared made it
+flash on the current workspace and take the focus on the way, and that focus
+also told slick its open conversation had been seen and could be marked read.
+Launch in Foreground shows it once it is there.
 
 ## Opening a conversation
 

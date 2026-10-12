@@ -33,7 +33,7 @@ BarWidget {
   readonly property string specialName: String(setting("specialWorkspace", "scratchpad"))
   readonly property bool openInSpecial: setting("openInSpecial", true) !== false
   readonly property bool autoStart: setting("autoStart", false) === true
-  readonly property bool launchForeground: setting("launchForeground", false) === true
+  readonly property bool launchForeground: setting("launchForeground", true) !== false
   readonly property bool dimWhenClosed: setting("dimWhenClosed", true) !== false
   readonly property bool hideWhenNotRunning: setting("hideWhenNotRunning", false) === true
   readonly property bool closeOnMiddle: setting("middleClickCloses", true) !== false
@@ -111,17 +111,7 @@ BarWidget {
     // A new slick window goes straight to the special workspace. `settled`
     // keeps a shell restart from yanking one that is already open.
     if (root.openInSpecial && settleTimer.settled) root.placeInSpecial()
-    if (root.showWhenReady || (root.launchForeground && settleTimer.settled)) foregroundTimer.restart()
-    root.showWhenReady = false
-  }
-
-  // Set by a click that launched slick: the person asked to see it, so it is
-  // shown once it appears whatever launchForeground says.
-  property bool showWhenReady: false
-  Timer {
-    id: showWhenReadyTimer
-    interval: 20000
-    onTriggered: root.showWhenReady = false
+    if (root.launchForeground && settleTimer.settled) foregroundTimer.restart()
   }
 
   Timer {
@@ -191,20 +181,28 @@ BarWidget {
   }
 
   // omarchy-launch-tui names the window org.omarchy.<command>, which is the
-  // class this widget watches; without it, the same thing by hand.
-  function launch(show) {
-    if (show) {
-      root.showWhenReady = true
-      showWhenReadyTimer.restart()
+  // class this widget watches. The launch goes through Hyprland with window
+  // rules, so a slick headed for the scratchpad is born there: it never
+  // flashes on the current workspace or takes the focus on its way out, which
+  // would also tell slick its open conversation was seen. Launch in
+  // Foreground then shows it (onRunningChanged), however it was launched.
+  function launch() {
+    var cmd = root.launchCommand.length > 0 ? root.launchCommand
+                                            : "omarchy-launch-tui --app-id=" + root.windowClass + " slick"
+    var lua = {}
+    if (root.openInSpecial) lua.workspace = "special:" + root.specialName + " silent"
+    if (root.openInSpecial || !root.launchForeground) lua.no_initial_focus = true
+    if (Hyprland.usingLua === true) {
+      var rules = Object.keys(lua).map(function (k) {
+        return k + " = " + (typeof lua[k] === "string" ? Model.luaString(lua[k]) : String(lua[k]))
+      })
+      Util.execArgv(["hyprctl", "eval", "hl.exec_cmd(" + Model.luaString(cmd) + ", { " + rules.join(", ") + " })"])
+    } else {
+      var legacy = []
+      if (lua.workspace) legacy.push("workspace " + lua.workspace)
+      if (lua.no_initial_focus) legacy.push("noinitialfocus")
+      Util.execArgv(["hyprctl", "dispatch", "exec", (legacy.length > 0 ? "[" + legacy.join(";") + "] " : "") + cmd])
     }
-    if (root.launchCommand.length > 0) {
-      Util.execDetached(root.launchCommand)
-      return
-    }
-    Util.execArgv(["bash", "-c",
-      'if command -v omarchy-launch-tui >/dev/null; then exec omarchy-launch-tui --app-id="$1" slick; '
-      + 'else exec setsid uwsm-app -- xdg-terminal-exec --app-id="$1" -e slick; fi',
-      "slick-launch", root.windowClass])
   }
 
   function focusWindow() {
@@ -264,15 +262,21 @@ BarWidget {
   }
 
   // Ask slick to quit, so it writes its goodbye; closing the window is the
-  // fallback for a slick that does not answer.
+  // fallback for a slick that refuses (an old one, without `slick quit`) or
+  // does not answer.
   function quit() {
     if (!root.running) return
-    if (root.stateLive) {
-      Util.execArgv(["slick", "quit"])
+    if (root.stateLive && !quitProc.running) {
+      quitProc.running = true
       quitFallbackTimer.restart()
     } else {
       root.closeWindow()
     }
+  }
+  Process {
+    id: quitProc
+    command: ["slick", "quit"]
+    onExited: function (code) { if (code !== 0) root.closeWindow() }
   }
   Timer {
     id: quitFallbackTimer
@@ -282,14 +286,14 @@ BarWidget {
 
   // Left click: open it, bring it back, put it away.
   function toggle() {
-    if (!root.running) root.launch(true)
+    if (!root.running) root.launch()
     else if (root.focused && root.hideMode === "Special workspace") root.park()
     else if (root.parked) root.showWindow()
     else root.focusWindow()
   }
 
   function open() {
-    if (!root.running) root.launch(true)
+    if (!root.running) root.launch()
     else if (root.parked) root.showWindow()
     else root.focusWindow()
   }
@@ -334,7 +338,7 @@ BarWidget {
     interval: 2500
     repeat: false
     running: root.autoStart
-    onTriggered: if (!root.running && root.isPrimaryInstance()) root.launch(false)
+    onTriggered: if (!root.running && root.isPrimaryInstance()) root.launch()
   }
 
   // ----------------------------------------------------------- hover preview
