@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > **Requires slick**, the Slack client for the terminal this widget drives.
 > Install it first: [slick.leonavas.com/#install](https://slick.leonavas.com/#install)
-> (one command, no sudo) or from [source](https://github.com/leonavas/slick).
+> (one command, installs in your home folder) or from [source](https://github.com/leonavas/slick).
 > Then add the widget ([Install](#install)).
 
 ![Slack in the Omarchy bar: badges, the hover list, the menu and reactions floating up](preview.png)
@@ -71,7 +71,7 @@ own it only shows a dimmed icon whose card points to slick's install page.
 
 **1. Install slick.** Follow
 [slick.leonavas.com/#install](https://slick.leonavas.com/#install): one
-command, no sudo. It downloads the latest release for your architecture,
+command. It downloads the latest release for your architecture,
 checks its SHA-256 and puts `slick` in `~/.local/bin`. Prefer to build it?
 The [slick README](https://github.com/leonavas/slick#install) has the source
 route. Then run `slick` once in a terminal to sign in to your workspace.
