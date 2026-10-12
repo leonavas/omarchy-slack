@@ -1,7 +1,9 @@
-# slick for the Omarchy bar
+# Slack for the Omarchy bar
 
-A bar widget for [Omarchy](https://omarchy.org) that puts
-[slick](https://slick.leonavas.com) in your bar the way a tray icon would.
+![Slack in the Omarchy bar: badges, the hover list, the menu and reactions floating up](docs/screenshot.png)
+
+A bar widget for [Omarchy](https://omarchy.org) that puts Slack in your bar
+the way a tray icon would, through [slick](https://slick.leonavas.com).
 slick is a fast, lightweight Slack client for the terminal, written in Rust
 ([source](https://github.com/leonavas/slick)).
 
@@ -16,13 +18,19 @@ slick is a fast, lightweight Slack client for the terminal, written in Rust
   red badge with their sum.
 - **Hover preview.** Hover the icon to see the unread conversations: who, the
   last message ("Ana: can you review the PR?"), mention count and how long ago.
-  Click a conversation to jump straight to it in slick.
+  Click a conversation to jump straight to it in slick. Below them, the
+  reactions people put on your messages ("Ana reacted 👍 to your message"),
+  which never add to the badges.
+- **Reaction bubbles.** A new reaction floats up out of the icon, Slack's
+  own emoji (custom and animated ones included) when slick has it. Not
+  while notifications are paused.
 - **Scratchpad parking.** slick lives in Omarchy's scratchpad (SUPER+S). A
   click shows it, another click puts it away without closing it, so it keeps
   running and counting.
 - **Menu (right click).** Launch on Login, Launch in Foreground, Open in
-  Scratchpad, Group notifications, pause notifications (30 minutes, 1 hour,
-  2 hours, until tomorrow) or resume them, and Quit slick.
+  Scratchpad, Group notifications, Show reactions, pause notifications (30 minutes, 1 hour,
+  2 hours, until tomorrow, or until a day and time you pick) or resume them,
+  and Quit slick.
 - **Pause notifications** uses Slack's own do-not-disturb, so the pause
   follows your account to every client and works even with slick closed.
   While a pause you set is on, the badges give way to a small bell-off mark.
@@ -52,18 +60,18 @@ slick is a fast, lightweight Slack client for the terminal, written in Rust
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/leonavas/omarchy-slick.git
-omarchy plugin enable leonavas.slick --section right
+omarchy plugin add https://github.com/leonavas/omarchy-slack.git
+omarchy plugin enable leonavas.slack --section right
 ```
 
-To update later: `omarchy plugin update leonavas.slick`, then
+To update later: `omarchy plugin update leonavas.slack`, then
 `omarchy restart shell`.
 
 ## Settings
 
 Change them in the bar's widget settings panel, or inline on the widget's entry
 in `~/.config/omarchy/shell.json`, e.g.
-`{ "id": "leonavas.slick", "badgeLayout": "Combined" }`.
+`{ "id": "leonavas.slack", "badgeLayout": "Combined" }`.
 
 | Key | Default | What it does |
 |---|---|---|
@@ -89,15 +97,17 @@ in `~/.config/omarchy/shell.json`, e.g.
 | `hideWhenNotRunning` | `false` | Remove the icon while slick is not running |
 | `middleClickCloses` | `true` | Middle click quits slick |
 | `hoverPreview` | `true` | Show the preview on hover |
-| `previewRows` | `6` | Conversations in the preview |
+| `previewRows` | `6` | Conversations in the preview, and reactions below them |
 | `previewChannels` | `false` | Also list unread channels without a mention |
+| `showReactions` | `true` | List reactions to your messages and float new ones out of the icon |
 | `mutedIndicator` | `Bell` | While paused: `Bell`, `Dim` or `None` |
 
 ## How it works
 
 slick publishes what it knows to `$XDG_RUNTIME_DIR/slick/state.json`,
 rewriting it atomically whenever something changes: unread counts, the latest
-unread messages per conversation, and the do-not-disturb state. The widget
+unread messages per conversation, reactions to your messages, and the
+do-not-disturb state. The widget
 watches that file. It is ignored whenever no slick window is open, so a crash
 never leaves a stale badge behind.
 
@@ -117,8 +127,8 @@ code.
 - **Changes to the plugin do not show up.** After updating or editing the
   plugin, run `omarchy restart shell`. The shell's own reload keeps running
   the old code.
-- **Two slick icons.** slick also has a tray icon of its own. Turn it off with
-  `tray = false` in `~/.config/slick/config`.
+- **Two icons.** slick also has a tray icon of its own. Turn it off in slick's
+  Settings (account menu), or with `tray = false` in `~/.config/slick/config`.
 - **No badges or preview.** Check that slick is running and that
   `$XDG_RUNTIME_DIR/slick/state.json` exists. The widget only trusts it while
   a window of class `org.omarchy.slick` is open, so a slick started some other

@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "leonavas.slick",
-  "name": "slick",
+  "id": "leonavas.slack",
+  "name": "Slack",
   "version": "1.0.0",
   "author": "leonavas",
   "license": "MIT",
-  "description": "slick, the Slack TUI, as a bar icon: opens it, parks it out of sight, badges unread DMs and channel mentions, previews them on hover and pauses notifications.",
+  "description": "Slack in the Omarchy bar, through slick (the Slack TUI): a bar icon that opens it, parks it out of sight, badges unread DMs and channel mentions, previews them on hover and pauses notifications.",
   "kinds": [
     "bar-widget"
   ],
@@ -13,8 +13,8 @@
     "barWidget": "Slick.qml"
   },
   "barWidget": {
-    "displayName": "slick",
-    "description": "slick as a tray icon: click to show or hide the window, red and blue badges for unread DMs and channel mentions, a preview of them on hover.",
+    "displayName": "Slack",
+    "description": "Slack as a tray icon, through slick: click to show or hide the window, red and blue badges for unread DMs and channel mentions, a preview of them on hover.",
     "category": "Status",
     "aliases": [
       "slick",
@@ -50,6 +50,7 @@
       "hoverPreview": true,
       "previewRows": 6,
       "previewChannels": false,
+      "showReactions": true,
       "mutedIndicator": "Bell"
     },
     "schema": [
@@ -251,6 +252,13 @@
         "label": "Preview every unread channel",
         "defaultValue": false,
         "description": "Off, the preview lists DMs, group DMs and channels that mention you, and only counts the rest. On, every unread channel gets a row."
+      },
+      {
+        "key": "showReactions",
+        "type": "boolean",
+        "label": "Show reactions to your messages",
+        "defaultValue": true,
+        "description": "Lists the reactions other people put on your messages in the preview, and floats each new one up out of the icon. They never add to the badges. The icon's menu toggles this as \"Show reactions\"."
       },
       {
         "key": "mutedIndicator",

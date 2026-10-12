@@ -13,7 +13,7 @@ import "Model.js" as Model
 // the widget through one JSON file slick rewrites in the runtime dir.
 BarWidget {
   id: root
-  moduleName: "leonavas.slick"
+  moduleName: "leonavas.slack"
 
   // ---------------------------------------------------------------- settings
   readonly property string launchCommand: String(setting("launchCommand", ""))
@@ -40,6 +40,7 @@ BarWidget {
   readonly property bool hoverPreview: setting("hoverPreview", true) !== false
   readonly property int previewRows: Math.max(1, Number(setting("previewRows", 6)))
   readonly property bool previewChannels: setting("previewChannels", false) === true
+  readonly property bool showReactions: setting("showReactions", true) !== false
   readonly property string mutedIndicator: String(setting("mutedIndicator", "Bell"))
 
   // ------------------------------------------------------------------- theme
@@ -85,6 +86,9 @@ BarWidget {
   readonly property bool muted: Model.snoozed(root.slickState, root.nowSec)
   readonly property bool dndActive: Model.dndActive(root.slickState, root.nowSec)
   readonly property var preview: Model.previewRows(root.slickState, root.previewRows, root.previewChannels)
+  // Reactions to your messages: listed in the card, never counted in a badge.
+  readonly property var reactions: root.showReactions
+    ? Model.reactionRows(root.slickState, root.previewRows) : ({ rows: [], hidden: 0 })
 
   FileView {
     id: stateFile
@@ -103,6 +107,22 @@ BarWidget {
     repeat: true
     running: root.running && root.rawState === null
     onTriggered: stateFile.reload()
+  }
+
+  // A reaction whose key the last snapshot did not have just happened: it
+  // floats up out of the icon. The first snapshot (shell start, slick start)
+  // only sets the baseline. A pause you set keeps it still, as it does the
+  // badges.
+  property var seenReactions: null
+  onSlickStateChanged: root.noteReactions()
+  function noteReactions() {
+    if (!root.slickState) { root.seenReactions = null; return }
+    var found = Model.newReactions(root.slickState, root.seenReactions)
+    root.seenReactions = found.keys
+    if (!root.showReactions || root.muted || !root.visible) return
+    // Oldest of the batch first, a few at most.
+    var fresh = found.fresh.slice(0, 5).reverse()
+    for (var i = 0; i < fresh.length; i++) root.floatReaction(fresh[i], i)
   }
 
   onRunningChanged: {
@@ -350,6 +370,43 @@ BarWidget {
   }
 
   function pause(minutes) { Util.execArgv(["slick", "dnd", "pause", String(Math.max(1, Math.round(minutes)))]) }
+
+  // "Until a date and time…": a day and an hour:minute picked in the menu,
+  // `pickerDay` days from today. The pause is the minutes from the moment of
+  // the click to that time, rounded up.
+  readonly property int pickerMaxDays: 30
+  readonly property int pickerMinuteStep: 15
+  property bool pickerOpen: false
+  property int pickerDay: 0
+  property int pickerHour: 0
+  property int pickerMinute: 0
+  readonly property real pickerTarget: Model.pickerTarget(root.pickerDay, root.pickerHour, root.pickerMinute, root.nowSec)
+  readonly property bool pickerValid: Model.minutesUntil(root.pickerTarget, root.nowSec) > 0
+
+  function resetPicker() {
+    root.nowSec = Date.now() / 1000
+    var start = Model.pickerDefault(root.nowSec)
+    root.pickerDay = start.day
+    root.pickerHour = start.hour
+    root.pickerMinute = start.minute
+  }
+
+  function stepPickerDay(delta) {
+    root.pickerDay = Math.max(0, Math.min(root.pickerMaxDays, root.pickerDay + delta))
+  }
+  function stepPickerHour(delta) { root.pickerHour = (root.pickerHour + delta + 24) % 24 }
+  function stepPickerMinute(delta) {
+    root.pickerMinute = (root.pickerMinute + delta * root.pickerMinuteStep + 60) % 60
+  }
+
+  // Measured again at the click: the clock the label follows ticks every 20 s.
+  function pauseUntilPicked() {
+    var now = Date.now() / 1000
+    var minutes = Model.minutesUntil(Model.pickerTarget(root.pickerDay, root.pickerHour, root.pickerMinute, now), now)
+    if (minutes <= 0) { root.nowSec = now; return }
+    root.close()
+    root.pause(minutes)
+  }
   function resume() { Util.execArgv(["slick", "dnd", "resume"]) }
 
   function writeSetting(key, value) {
@@ -395,6 +452,8 @@ BarWidget {
   onMenuOpenChanged: {
     if (!menuOpen) return
     root.popupOpen = false
+    root.pickerOpen = false
+    root.nowSec = Date.now() / 1000
     if (root.notInstalled) root.checkInstalled()
     else if (!root.stateLive && !dndStatus.running) dndStatus.running = true
   }
@@ -708,6 +767,173 @@ BarWidget {
     anchors.horizontalCenterOffset: Math.min(corner, Math.max(0, Math.round((root.width - implicitWidth) / 2)))
     anchors.verticalCenter: parent.verticalCenter
     anchors.verticalCenterOffset: Math.min(corner, Math.max(0, Math.round((root.height - implicitHeight) / 2)))
+  }
+
+  // A reaction's emoji: slick's image of it (animated when it is a GIF), or
+  // its character. `size` is the font size it sits next to.
+  component EmojiGlyph: Item {
+    id: emojiGlyph
+
+    property var visual: null
+    property int size: Style.font.bodySmall
+    property color color: root.foreground
+    readonly property bool isImage: !!emojiGlyph.visual && String(emojiGlyph.visual.image || "").length > 0
+    readonly property bool isAnimated: emojiGlyph.isImage && emojiGlyph.visual.animated === true
+    readonly property int box: Math.round(emojiGlyph.size * 1.25)
+
+    implicitWidth: emojiGlyph.isImage ? emojiGlyph.box : emojiText.implicitWidth
+    implicitHeight: emojiGlyph.isImage ? emojiGlyph.box : emojiText.implicitHeight
+    width: implicitWidth
+    height: implicitHeight
+
+    AnimatedImage {
+      anchors.fill: parent
+      visible: emojiGlyph.isAnimated
+      source: emojiGlyph.isAnimated ? emojiGlyph.visual.image : ""
+      playing: visible
+      fillMode: Image.PreserveAspectFit
+      smooth: true
+    }
+
+    Image {
+      anchors.fill: parent
+      visible: emojiGlyph.isImage && !emojiGlyph.isAnimated
+      source: visible ? emojiGlyph.visual.image : ""
+      sourceSize.width: Math.round(emojiGlyph.box * Screen.devicePixelRatio)
+      sourceSize.height: Math.round(emojiGlyph.box * Screen.devicePixelRatio)
+      fillMode: Image.PreserveAspectFit
+      smooth: true
+      asynchronous: true
+    }
+
+    Text {
+      id: emojiText
+      anchors.centerIn: parent
+      visible: !emojiGlyph.isImage
+      text: emojiGlyph.visual && !emojiGlyph.isImage ? String(emojiGlyph.visual.text || "") : ""
+      textFormat: Text.PlainText
+      color: emojiGlyph.color
+      font.family: root.fontFamily
+      font.pixelSize: emojiGlyph.size
+    }
+  }
+
+  // ------------------------------------------------------- reaction bubbles
+  //
+  // The bar's own surface is only as tall as the bar, so the bubbles fly in a
+  // popup of their own anchored to it: transparent, with an empty input mask
+  // so it never takes a click, and shown only while one is in the air. It
+  // starts on the icon and runs away from the screen edge the bar sits on.
+  property int floatingReactions: 0
+
+  function floatReaction(visual, index) {
+    var bubble = bubbleComponent.createObject(bubbleLayer, { visual: visual, delay: index * 220 })
+    if (bubble) root.floatingReactions += 1
+  }
+
+  PopupWindow {
+    id: bubbles
+
+    readonly property string edge: root.bar ? String(root.bar.position || "top") : "top"
+    readonly property bool horizontal: bubbles.edge === "left" || bubbles.edge === "right"
+    // -1: away from a bottom or right bar, toward smaller coordinates.
+    readonly property int direction: bubbles.edge === "bottom" || bubbles.edge === "right" ? -1 : 1
+    readonly property int size: Math.round(Math.max(18, Style.bar.iconCanvas * 1.35))
+    readonly property int pad: Math.round(bubbles.size * 0.25)
+    readonly property int travel: Math.round(root.barSize / 2 + Style.space(34))
+    readonly property int along: bubbles.travel + bubbles.size + bubbles.pad * 2
+    readonly property int across: bubbles.size * 2
+    readonly property int start: bubbles.direction < 0 ? bubbles.along - bubbles.size - bubbles.pad : bubbles.pad
+
+    visible: root.floatingReactions > 0
+    color: "transparent"
+    implicitWidth: bubbles.horizontal ? bubbles.along : bubbles.across
+    implicitHeight: bubbles.horizontal ? bubbles.across : bubbles.along
+    mask: Region {}
+
+    anchor {
+      id: bubbleAnchor
+      window: root.QsWindow.window
+      adjustment: PopupAdjustment.Slide
+      edges: Edges.Top | Edges.Left
+      gravity: Edges.Bottom | Edges.Right
+      rect.width: 1
+      rect.height: 1
+
+      // The bubble's first position sits on the icon's centre.
+      onAnchoring: {
+        var window = root.QsWindow.window
+        if (!window) return
+        var center = window.contentItem.mapFromItem(root, root.width / 2, root.height / 2)
+        var offset = bubbles.start + bubbles.size / 2
+        bubbleAnchor.rect.x = Math.round(bubbles.horizontal ? center.x - offset : center.x - bubbles.across / 2)
+        bubbleAnchor.rect.y = Math.round(bubbles.horizontal ? center.y - bubbles.across / 2 : center.y - offset)
+      }
+    }
+
+    Item {
+      id: bubbleLayer
+      anchors.fill: parent
+    }
+  }
+
+  Component {
+    id: bubbleComponent
+
+    Item {
+      id: bubble
+
+      property var visual: null
+      property int delay: 0
+      readonly property real from: bubbles.start
+      readonly property real to: bubbles.start + bubbles.direction * bubbles.travel
+
+      width: bubbles.size
+      height: bubbles.size
+      x: bubbles.horizontal ? bubble.from : (bubbles.across - bubbles.size) / 2
+      y: bubbles.horizontal ? (bubbles.across - bubbles.size) / 2 : bubble.from
+      opacity: 0
+      scale: 0.8
+
+      EmojiGlyph {
+        anchors.centerIn: parent
+        visual: bubble.visual
+        size: Math.round(bubbles.size / 1.25)
+      }
+
+      SequentialAnimation {
+        running: true
+        PauseAnimation { duration: bubble.delay }
+        PropertyAction { target: bubble; property: "opacity"; value: 1 }
+        ParallelAnimation {
+          NumberAnimation {
+            target: bubble
+            property: bubbles.horizontal ? "x" : "y"
+            to: bubble.to
+            duration: 1400
+            easing.type: Easing.OutCubic
+          }
+          NumberAnimation {
+            target: bubble
+            property: "scale"
+            to: 1.35
+            duration: 1400
+            easing.type: Easing.OutCubic
+          }
+          NumberAnimation {
+            target: bubble
+            property: "opacity"
+            to: 0
+            duration: 1400
+            easing.type: Easing.InQuad
+          }
+        }
+        onFinished: {
+          root.floatingReactions = Math.max(0, root.floatingReactions - 1)
+          bubble.destroy()
+        }
+      }
+    }
   }
 
   // ----------------------------------------------------------- preview card
@@ -1037,6 +1263,142 @@ BarWidget {
         font.family: root.fontFamily
         font.pixelSize: Style.font.caption
       }
+
+      // Reactions other people put on your messages, newest first, after the
+      // unread conversations. A click jumps to the message.
+      PanelSeparator {
+        visible: root.reactions.rows.length > 0
+        foreground: popup.fg
+      }
+
+      PanelSectionHeader {
+        visible: root.reactions.rows.length > 0
+        text: "Reactions"
+        foreground: popup.fg
+        fontFamily: root.fontFamily
+      }
+
+      Repeater {
+        model: root.reactions.rows
+
+        Rectangle {
+          id: reactionRow
+          required property var modelData
+
+          width: previewColumn.width
+          height: reactionInner.implicitHeight + Style.space(12)
+          radius: Style.spacing.labelGap
+          color: reactionArea.containsMouse
+            ? Qt.rgba(popup.fg.r, popup.fg.g, popup.fg.b, 0.08) : "transparent"
+
+          readonly property int indent: Math.round(Style.font.bodySmall * 1.5)
+
+          Column {
+            id: reactionInner
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.leftMargin: Style.space(6)
+            anchors.rightMargin: Style.space(6)
+            spacing: Style.space(3)
+
+            // "Ana reacted 🎉 to your message": the name gives way first, so
+            // the emoji always shows.
+            Item {
+              width: parent.width
+              height: Math.max(reactionLead.implicitHeight, reactionEmoji.height)
+
+              Text {
+                id: reactionKind
+                width: reactionRow.indent
+                text: reactionRow.modelData.glyph
+                color: popup.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                font.bold: true
+                anchors.left: parent.left
+                anchors.baseline: reactionLead.baseline
+              }
+
+              Text {
+                id: reactionLead
+                readonly property real room: parent.width - reactionKind.width - reactionTime.width
+                  - reactionEmoji.width - Style.space(56)
+                width: Math.max(0, Math.min(implicitWidth, room))
+                text: reactionRow.modelData.who + " reacted"
+                textFormat: Text.PlainText
+                color: popup.fg
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                elide: Text.ElideRight
+                anchors.left: reactionKind.right
+                anchors.verticalCenter: parent.verticalCenter
+              }
+
+              EmojiGlyph {
+                id: reactionEmoji
+                visual: reactionRow.modelData.emoji
+                size: Style.font.bodySmall
+                color: popup.fg
+                anchors.left: reactionLead.right
+                anchors.leftMargin: Style.space(4)
+                anchors.verticalCenter: reactionLead.verticalCenter
+              }
+
+              Text {
+                text: "to your message"
+                color: popup.fg
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                elide: Text.ElideRight
+                anchors.left: reactionEmoji.right
+                anchors.leftMargin: Style.space(4)
+                anchors.right: reactionTime.left
+                anchors.rightMargin: Style.space(8)
+                anchors.baseline: reactionLead.baseline
+              }
+
+              Text {
+                id: reactionTime
+                text: Model.relativeTime(reactionRow.modelData.latest, root.nowSec)
+                color: popup.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                anchors.right: parent.right
+                anchors.baseline: reactionLead.baseline
+              }
+            }
+
+            Text {
+              visible: text !== ""
+              text: reactionRow.modelData.line
+              textFormat: Text.PlainText
+              x: reactionRow.indent
+              width: reactionInner.width - x
+              color: popup.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+              elide: Text.ElideRight
+            }
+          }
+
+          MouseArea {
+            id: reactionArea
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.openConversation(reactionRow.modelData)
+          }
+        }
+      }
+
+      Text {
+        visible: root.reactions.hidden > 0
+        text: "+" + root.reactions.hidden + (root.reactions.hidden === 1 ? " more reaction" : " more reactions")
+        color: popup.dim
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+      }
     }
   }
 
@@ -1100,6 +1462,85 @@ BarWidget {
         hoverEnabled: true
         cursorShape: entry.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
         onClicked: entry.activated()
+      }
+    }
+
+    // ‹ value ›, for the pause picker. Clicks on the chevrons or the wheel
+    // over it step the value.
+    component Stepper: Item {
+      id: stepper
+
+      property string label: ""
+      property int valueWidth: 0
+      property bool canBack: true
+      property bool canForward: true
+
+      signal stepped(int delta)
+
+      implicitWidth: backChevron.implicitWidth + stepper.valueWidth + forwardChevron.implicitWidth + Style.space(8)
+      implicitHeight: valueText.implicitHeight + Style.space(8)
+
+      WheelHandler {
+        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        onWheel: function (event) {
+          if (event.angleDelta.y > 0 && stepper.canForward) stepper.stepped(1)
+          else if (event.angleDelta.y < 0 && stepper.canBack) stepper.stepped(-1)
+        }
+      }
+
+      Text {
+        id: backChevron
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        text: "󰅁"
+        color: menu.fg
+        opacity: !stepper.canBack ? 0.25 : backArea.containsMouse ? 1 : 0.6
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.bodySmall
+
+        MouseArea {
+          id: backArea
+          anchors.fill: parent
+          anchors.margins: -Style.space(4)
+          hoverEnabled: true
+          enabled: stepper.canBack
+          cursorShape: Qt.PointingHandCursor
+          onClicked: stepper.stepped(-1)
+        }
+      }
+
+      Text {
+        id: valueText
+        anchors.left: backChevron.right
+        anchors.right: forwardChevron.left
+        anchors.verticalCenter: parent.verticalCenter
+        horizontalAlignment: Text.AlignHCenter
+        text: stepper.label
+        color: menu.fg
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.bodySmall
+        font.bold: true
+      }
+
+      Text {
+        id: forwardChevron
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        text: "󰅂"
+        color: menu.fg
+        opacity: !stepper.canForward ? 0.25 : forwardArea.containsMouse ? 1 : 0.6
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.bodySmall
+
+        MouseArea {
+          id: forwardArea
+          anchors.fill: parent
+          anchors.margins: -Style.space(4)
+          hoverEnabled: true
+          enabled: stepper.canForward
+          cursorShape: Qt.PointingHandCursor
+          onClicked: stepper.stepped(1)
+        }
       }
     }
 
@@ -1193,6 +1634,16 @@ BarWidget {
           }
         }
 
+        MenuEntry {
+          label: "Show reactions"
+          showCheck: true
+          checked: root.showReactions
+          onActivated: {
+            root.close()
+            root.writeSetting("showReactions", !root.showReactions)
+          }
+        }
+
         PanelSeparator { foreground: menu.fg }
 
         MenuEntry {
@@ -1226,6 +1677,64 @@ BarWidget {
               root.pause(modelData.minutes > 0 ? modelData.minutes
                                                : Model.minutesUntilTomorrow(Date.now() / 1000))
             }
+          }
+        }
+
+        MenuEntry {
+          label: "Until a date and time…"
+          indent: Style.space(10)
+          onActivated: {
+            if (!root.pickerOpen) root.resetPicker()
+            root.pickerOpen = !root.pickerOpen
+          }
+        }
+
+        // The picker: a day, an hour and a minute, then the pause itself,
+        // labelled with when it would end.
+        Column {
+          visible: root.pickerOpen
+          width: parent.width
+          spacing: Style.space(2)
+
+          Stepper {
+            x: Style.space(18)
+            width: parent.width - x - Style.space(8)
+            label: Model.pickerDayLabel(root.pickerDay, root.nowSec)
+            canBack: root.pickerDay > 0
+            canForward: root.pickerDay < root.pickerMaxDays
+            onStepped: function (delta) { root.stepPickerDay(delta) }
+          }
+
+          Row {
+            x: Style.space(18)
+            spacing: Style.space(4)
+
+            Stepper {
+              valueWidth: Math.round(Style.font.bodySmall * 2)
+              label: Model.pad(root.pickerHour)
+              onStepped: function (delta) { root.stepPickerHour(delta) }
+            }
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              text: ":"
+              color: menu.fg
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+              font.bold: true
+            }
+            Stepper {
+              valueWidth: Math.round(Style.font.bodySmall * 2)
+              label: Model.pad(root.pickerMinute)
+              onStepped: function (delta) { root.stepPickerMinute(delta) }
+            }
+          }
+
+          MenuEntry {
+            indent: Style.space(10)
+            enabled: root.pickerValid
+            label: root.pickerValid ? "Pause until " + Model.clockLabel(root.pickerTarget, root.nowSec)
+                                    : "Pick a time in the future"
+            onActivated: root.pauseUntilPicked()
           }
         }
 

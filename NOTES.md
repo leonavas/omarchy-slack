@@ -90,6 +90,42 @@ size), inside one `opacity="0.6"` group so crossings do not darken twice. The
 masks are shared, so the weave's cuts come out as thin dark lines instead of
 holes. Regenerate it from the white mark rather than editing it by hand.
 
+## "Until a date and time"
+
+The picker steps a day (today up to 30 days out), an hour and a minute in
+quarters, and pauses for the minutes from the click to that time, rounded up
+so the pause never ends early. The target is rebuilt from the calendar date
+(`new Date(y, m, d + offset, h, min)`), so month ends and DST come out right.
+Its label uses the same `clockLabel` as the card: a bare weekday only within
+the coming six days, a date beyond that.
+
+## Reactions
+
+slick lists the reactions other people put on your messages in `reactions`
+(newest first, up to 20, for a day). The card shows them in their own
+section after the unread conversations; they never count toward a badge or
+the "waiting" number. A state file without the field, from an older slick,
+reads as no reactions.
+
+Each reaction's emoji is drawn from what slick hands over in `emoji`: the
+local `file` first (`AnimatedImage` for a GIF, `Image` otherwise), then the
+`url`, then the Unicode `char`. Without it (an older slick) a small shortcode
+table in `Model.js` stands in, and anything else shows as `:name:`.
+
+A reaction is new when its key (conversation, message ts, reaction, user,
+`at`) was not in the previous snapshot. The first snapshot after the shell or
+slick starts only sets the baseline, so nothing replays at login. New ones
+float out of the icon, staggered, unless a pause you set is on (same rule as
+the badges) or "Show reactions" is off.
+
+The bar's surface is only as tall as the bar, so the bubbles fly in a
+`PopupWindow` anchored to the bar window, the same mechanism as the hover
+card: transparent, `mask: Region {}` so it takes no input or focus, and only
+mapped while a bubble is in the air. It starts on the icon and moves away
+from the screen edge the bar is on (up from a bottom bar, down from a top
+one). It does not go through the bar's popout coordinator, so it neither
+closes nor is closed by an open card.
+
 ## Pausing with slick closed
 
 `slick dnd pause|resume|status` call Slack with the saved session, so the
