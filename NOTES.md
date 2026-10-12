@@ -28,6 +28,15 @@ them summed from `conversations[]`: `mentions` per DM or group DM with at least
 one per unread conversation, and `mentions` per channel. Since slick only
 lists a capped number of conversations, the fallback can undercount.
 
+Threads you follow add to both, split the way Slack does it: replies that
+mention you (`threads.mentions`, Slack's own count) join the red badge, the
+other new replies (`threads.new` minus those) the blue one, which already
+means "channel activity". A third badge would not fit the icon. Under the
+channel badge's Mentions or None modes the blue part is dropped; "Show
+threads" off drops both. A slick from before `threads.new` gets it summed from
+the list (each thread's `new`, else `unread`), and one from before `threads`
+counts none.
+
 Which corner each takes is two properties at the top of the icon section
 (`dmCorner`, `channelCorner`), so moving them is a one-line change.
 
@@ -122,6 +131,17 @@ so the pause never ends early. The target is rebuilt from the calendar date
 (`new Date(y, m, d + offset, h, min)`), so month ends and DST come out right.
 Its label uses the same `clockLabel` as the card: a bare weekday only within
 the coming six days, a date beyond that.
+
+## Threads
+
+The card's Threads section sits between the conversations and the reactions,
+ahead of the line counting muted or mentions-only channels:
+per thread, the conversation, its first message (plain, one line) and the
+latest new reply (rich, like the conversations' messages), with a pill of new
+replies in red when one mentions you, blue otherwise. A click runs `slick open
+<conversation> <latest reply ts> --thread <thread ts>`, which opens the
+thread at that reply; with no reply loaded yet it opens it at its first
+message.
 
 ## Reactions
 

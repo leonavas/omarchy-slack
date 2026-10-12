@@ -41,6 +41,9 @@ BarWidget {
   readonly property int previewRows: Math.max(1, Number(setting("previewRows", 6)))
   readonly property bool previewChannels: setting("previewChannels", false) === true
   readonly property bool showReactions: setting("showReactions", true) !== false
+  // Threads you follow: their new replies count in the badges (mentions red,
+  // the rest blue) and the unread ones get a section in the card.
+  readonly property bool showThreads: setting("showThreads", true) !== false
   // Channels count only when they mention you: no blue badge or row for the
   // channels that notify you, all of them in the footer.
   readonly property bool channelMentionsOnly: setting("channelMentionsOnly", false) === true
@@ -92,6 +95,9 @@ BarWidget {
   // Reactions to your messages: listed in the card, never counted in a badge.
   readonly property var reactions: root.showReactions
     ? Model.reactionRows(root.slickState, root.previewRows) : ({ rows: [], hidden: 0 })
+  // Threads you follow with new replies, as slick lists them.
+  readonly property var threads: root.showThreads
+    ? Model.threadRows(root.slickState, root.previewRows) : ({ rows: [], hidden: 0 })
 
   FileView {
     id: stateFile
@@ -237,8 +243,14 @@ BarWidget {
   // Two counts, two corners. A manual pause hides both; Slack's scheduled
   // DND does not.
   readonly property bool badgesOn: !root.muted && root.badgeStyle !== "None" && !root.notInstalled
-  readonly property int dmCount: root.badgesOn ? Model.directMessages(root.slickState) : 0
-  readonly property int channelCount: root.badgesOn ? Model.channelBadgeCount(root.slickState, root.channelBadgeMode, root.channelMentionsOnly) : 0
+  // Thread replies split like Slack's: the ones that mention you join the
+  // red count, the other new replies the blue one.
+  readonly property bool threadBadges: root.badgesOn && root.showThreads
+  readonly property int dmCount: root.badgesOn
+    ? Model.directMessages(root.slickState) + (root.threadBadges ? Model.threadMentions(root.slickState) : 0) : 0
+  readonly property int channelCount: root.badgesOn
+    ? Model.channelBadgeCount(root.slickState, root.channelBadgeMode, root.channelMentionsOnly)
+      + (root.threadBadges ? Model.threadBadgeCount(root.slickState, root.channelBadgeMode) : 0) : 0
   readonly property bool anyBadge: root.dmCount > 0 || root.channelCount > 0
   // "Combined" folds both into one badge in the DM color and corner.
   readonly property int combinedCount: root.dmCount + root.channelCount
@@ -1168,7 +1180,8 @@ BarWidget {
         textFormat: Text.PlainText
         visible: root.preview.rows.length === 0
         text: root.totals.channelsQuiet > 0 && !root.previewChannels
-          ? (root.totals.quietKnown ? "Nothing that notifies you" : "No unread DMs or mentions") : "No unread messages"
+          ? (root.totals.quietKnown ? "Nothing that notifies you" : "No unread DMs or mentions")
+          : root.threads.rows.length > 0 ? "No unread conversations" : "No unread messages"
         color: popup.dim
         font.family: root.fontFamily
         font.pixelSize: Style.font.bodySmall
@@ -1320,19 +1333,189 @@ BarWidget {
         readonly property var parts: {
           var out = []
           if (root.preview.hidden > 0) out.push("+" + root.preview.hidden + " more")
-          var quiet = root.totals.channelsQuiet
-          if (!root.previewChannels && quiet > 0) {
-            if (root.totals.quietKnown)
-              out.push("+" + quiet + (quiet === 1 ? " muted or mentions-only channel unread"
-                                                 : " muted or mentions-only channels unread"))
-            else
-              out.push("+" + quiet + (quiet === 1 ? " channel with unread messages, no mentions"
-                                                 : " channels with unread messages, no mentions"))
-          }
           return out
         }
         visible: parts.length > 0
         text: parts.join(" · ")
+        color: popup.dim
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+      }
+
+      // Threads you follow with new replies, newest activity first: where,
+      // the thread's first message, and its latest reply. A click opens the
+      // thread at that reply.
+      PanelSeparator {
+        visible: root.threads.rows.length > 0
+        foreground: popup.fg
+      }
+
+      PanelSectionHeader {
+        visible: root.threads.rows.length > 0
+        text: "Threads"
+        foreground: popup.fg
+        fontFamily: root.fontFamily
+      }
+
+      Repeater {
+        model: root.threads.rows
+
+        Rectangle {
+          id: threadRow
+          required property var modelData
+
+          width: previewColumn.width
+          height: threadInner.implicitHeight + Style.space(12)
+          radius: Style.spacing.labelGap
+          color: threadArea.containsMouse
+            ? Qt.rgba(popup.fg.r, popup.fg.g, popup.fg.b, 0.08) : "transparent"
+
+          readonly property int indent: Math.round(Style.font.bodySmall * 1.5)
+
+          Column {
+            id: threadInner
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.leftMargin: Style.space(6)
+            anchors.rightMargin: Style.space(6)
+            spacing: Style.space(3)
+
+            Item {
+              width: parent.width
+              height: threadName.implicitHeight
+
+              Text {
+                id: threadKind
+                textFormat: Text.PlainText
+                width: threadRow.indent
+                text: threadRow.modelData.glyph
+                color: threadRow.modelData.mention ? root.directColor : root.channelColor
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                font.bold: true
+                anchors.left: parent.left
+                anchors.baseline: threadName.baseline
+              }
+
+              Text {
+                id: threadName
+                textFormat: Text.PlainText
+                text: threadRow.modelData.name
+                color: popup.fg
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                font.bold: true
+                elide: Text.ElideRight
+                anchors.left: threadKind.right
+                anchors.right: threadMarker.left
+                anchors.rightMargin: Style.space(8)
+              }
+
+              // New replies as a pill: red when one mentions you, blue
+              // otherwise, the badges' colors.
+              Rectangle {
+                id: threadMarker
+                readonly property bool hasCount: threadRow.modelData.count > 0
+                width: hasCount ? Math.max(height, threadCount.implicitWidth + Style.space(8))
+                                : Math.round(Style.font.bodySmall * 0.45)
+                height: hasCount ? threadCount.implicitHeight + Style.space(2) : width
+                radius: height / 2
+                color: threadRow.modelData.mention ? root.directColor : root.channelColor
+                anchors.right: threadTime.left
+                anchors.rightMargin: threadTime.text !== "" ? Style.space(8) : 0
+                anchors.verticalCenter: threadName.verticalCenter
+
+                Text {
+                  id: threadCount
+                  textFormat: Text.PlainText
+                  anchors.centerIn: parent
+                  visible: threadMarker.hasCount
+                  text: Model.badgeLabel(threadRow.modelData.count)
+                  color: root.badgeDigitColor
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                }
+              }
+
+              Text {
+                id: threadTime
+                textFormat: Text.PlainText
+                text: Model.relativeTime(threadRow.modelData.latest, root.nowSec)
+                color: popup.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                anchors.right: parent.right
+                anchors.baseline: threadName.baseline
+              }
+            }
+
+            // The thread's first message, one line.
+            Text {
+              visible: text !== ""
+              text: threadRow.modelData.root
+              textFormat: Text.PlainText
+              x: threadRow.indent
+              width: threadInner.width - x
+              color: popup.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+              elide: Text.ElideRight
+            }
+
+            // Its latest new reply, up to two lines, word by word like the
+            // conversations' messages.
+            Flow {
+              id: replyFlow
+              visible: threadRow.modelData.reply.length > 0
+              x: threadRow.indent
+              width: threadInner.width - x
+              height: visible ? Math.min(implicitHeight, Math.ceil(messageMetrics.height * 2)) : 0
+              clip: true
+
+              Repeater {
+                model: threadRow.modelData.reply
+
+                Loader {
+                  required property var modelData
+                  readonly property var token: modelData
+                  sourceComponent: modelData.kind === "img" ? messageEmoji : messageWord
+                }
+              }
+            }
+          }
+
+          MouseArea {
+            id: threadArea
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.openConversation(threadRow.modelData)
+          }
+        }
+      }
+
+      Text {
+        textFormat: Text.PlainText
+        visible: root.threads.hidden > 0
+        text: "+" + root.threads.hidden + (root.threads.hidden === 1 ? " more thread" : " more threads")
+        color: popup.dim
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+      }
+
+      // Muted or mentions-only channels with unread messages: counted, not
+      // listed. After the threads, so those come first.
+      Text {
+        textFormat: Text.PlainText
+        readonly property int quiet: root.previewChannels ? 0 : root.totals.channelsQuiet
+        visible: quiet > 0
+        text: root.totals.quietKnown
+          ? "+" + quiet + (quiet === 1 ? " muted or mentions-only channel unread"
+                                       : " muted or mentions-only channels unread")
+          : "+" + quiet + (quiet === 1 ? " channel with unread messages, no mentions"
+                                       : " channels with unread messages, no mentions")
         color: popup.dim
         font.family: root.fontFamily
         font.pixelSize: Style.font.caption
@@ -1709,6 +1892,16 @@ BarWidget {
           onActivated: {
             root.close()
             root.writeSetting("channelMentionsOnly", !root.channelMentionsOnly)
+          }
+        }
+
+        MenuEntry {
+          label: "Show threads"
+          showCheck: true
+          checked: root.showThreads
+          onActivated: {
+            root.close()
+            root.writeSetting("showThreads", !root.showThreads)
           }
         }
 

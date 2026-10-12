@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "author": "leonavas",
   "license": "MIT",
-  "description": "Slack in the Omarchy bar, through slick (the Slack TUI): a bar icon that opens it, parks it out of sight, badges unread DMs and channel mentions, previews them on hover and pauses notifications.",
+  "description": "Slack in the Omarchy bar, through slick (the Slack TUI): a bar icon that opens it, parks it out of sight, badges unread DMs, channel mentions and thread replies, previews them on hover and pauses notifications.",
   "kinds": [
     "bar-widget"
   ],
@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "Slack",
-    "description": "Slack as a tray icon, through slick: click to show or hide the window, red and blue badges for unread DMs and channel mentions, a preview of them on hover.",
+    "description": "Slack as a tray icon, through slick: click to show or hide the window, red and blue badges for unread DMs, channel mentions and thread replies, a preview of them on hover.",
     "category": "Status",
     "aliases": [
       "slick",
@@ -51,6 +51,7 @@
       "previewRows": 6,
       "previewChannels": false,
       "showReactions": true,
+      "showThreads": true,
       "channelMentionsOnly": false,
       "mutedIndicator": "Bell"
     },
@@ -119,7 +120,7 @@
           "None"
         ],
         "defaultValue": "Count",
-        "description": "Two badges at once: unread DM and group DM messages at the bottom-right in red, channel mentions at the top-right in blue. A badge with nothing to count is not drawn. Dot marks the same corners without numbers."
+        "description": "Two badges at once: unread DM and group DM messages and thread replies that mention you at the bottom-right in red, channel mentions and new replies in threads you follow at the top-right in blue. A badge with nothing to count is not drawn. Dot marks the same corners without numbers."
       },
       {
         "key": "badgeLayout",
@@ -157,7 +158,7 @@
           "None"
         ],
         "defaultValue": "Unread",
-        "description": "Unread counts the messages that mention you plus the unread channels that notify you: not muted and not set to mentions only in Slack. Mentions counts only the mentions. All unread adds every unread channel. None drops the channel badge."
+        "description": "Unread counts the messages that mention you plus the unread channels that notify you (not muted and not set to mentions only in Slack) plus new replies in threads you follow. Mentions counts only the channel mentions. All unread adds every unread channel. None drops the channel badge."
       },
       {
         "key": "badgeScale",
@@ -268,6 +269,13 @@
         "label": "Show reactions to your messages",
         "defaultValue": true,
         "description": "Lists the reactions other people put on your messages in the preview, and floats each new one up out of the icon. They never add to the badges. The icon's menu toggles this as \"Show reactions\"."
+      },
+      {
+        "key": "showThreads",
+        "type": "boolean",
+        "label": "Show threads you follow",
+        "defaultValue": true,
+        "description": "Lists the threads you follow with new replies in the preview. Replies that mention you add to the red badge, the other new replies to the blue one (not with the channel badge set to Mentions or None). The icon's menu toggles this as \"Show threads\"."
       },
       {
         "key": "mutedIndicator",

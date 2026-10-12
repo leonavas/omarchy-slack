@@ -94,6 +94,9 @@ function parseState(text) {
   if (!Array.isArray(data.conversations)) data.conversations = []
   // Older slick publishes no reactions.
   if (!Array.isArray(data.reactions)) data.reactions = []
+  // Nor threads.
+  if (!data.threads || typeof data.threads !== "object") data.threads = {}
+  if (!Array.isArray(data.threads.list)) data.threads.list = []
   return data
 }
 
@@ -430,6 +433,92 @@ function previewRows(state, max, includeChannels, mentionsOnly) {
       messages: lines,
       ts: ts,
       threadTs: threadTs !== ts ? threadTs : "",
+    })
+  }
+  return result
+}
+
+// ------------------------------------------------------------------ threads
+
+// A thread's new replies: `new`, or, from a slick before that field, `unread`.
+function threadNew(item) {
+  if (!item || typeof item !== "object") return 0
+  return countOf(typeof item["new"] === "number" ? item["new"] : item.unread)
+}
+
+// New replies in the threads you follow: `threads.new`, else summed from the
+// list (which slick caps).
+function threadReplies(state) {
+  var threads = state ? state.threads : null
+  if (!threads || typeof threads !== "object") return 0
+  if (typeof threads["new"] === "number") return countOf(threads["new"])
+  var t = state.totals
+  if (t && typeof t === "object" && typeof t.thread_new === "number") return countOf(t.thread_new)
+  var list = Array.isArray(threads.list) ? threads.list : []
+  var total = 0
+  for (var i = 0; i < list.length; i++) total += threadNew(list[i])
+  return total
+}
+
+// Thread replies that mention you: Slack's own count (`threads.mentions`),
+// else one per thread in the list that mentions you.
+function threadMentions(state) {
+  var threads = state ? state.threads : null
+  if (!threads || typeof threads !== "object") return 0
+  if (threads.mentions !== undefined && threads.mentions !== null) return countOf(threads.mentions)
+  var list = Array.isArray(threads.list) ? threads.list : []
+  var total = 0
+  for (var i = 0; i < list.length; i++) if (list[i] && list[i].mention === true) total++
+  return total
+}
+
+// The thread replies the blue badge adds, for the `channelBadge` setting:
+// the new replies that do not mention you (those go to the red badge, as in
+// Slack). None under "Mentions" or "None".
+function threadBadgeCount(state, mode) {
+  if (mode === "None" || mode === "Mentions") return 0
+  return Math.max(0, threadReplies(state) - threadMentions(state))
+}
+
+// Unread threads as rows for the hover card, newest activity first as slick
+// lists them: where, the thread's first message, and its latest new reply.
+// Returns { rows, hidden } like previewRows. A click opens the thread at that
+// reply.
+function threadRows(state, max) {
+  var result = { rows: [], hidden: 0 }
+  var list = state && state.threads && Array.isArray(state.threads.list) ? state.threads.list : []
+  var limit = Math.max(1, Number(max) || 6)
+  for (var i = 0; i < list.length; i++) {
+    var item = list[i]
+    if (!item || typeof item !== "object" || !item.ts) continue
+    var conv = item.conversation && typeof item.conversation === "object" ? item.conversation : null
+    if (!conv || !conv.id) continue
+    if (result.rows.length >= limit) { result.hidden += 1; continue }
+    var kind = kindOf(conv.kind)
+    var name = String(conv.name || conv.id).trim()
+    if (kind === "channel" || kind === "private") name = name.replace(/^#/, "")
+    var rootMsg = item.root && typeof item.root === "object" ? item.root : {}
+    var rootBy = String(rootMsg.author || "").trim()
+    var rootText = oneLine(rootMsg.text)
+    var messages = Array.isArray(item.messages) ? item.messages : []
+    var last = messages.length > 0 ? messages[messages.length - 1] : null
+    if (last && typeof last !== "object") last = null
+    var by = last ? String(last.author || "").trim() : ""
+    var reply = last ? messageTokens(last, by.length > 0 ? by + ": " : "") : []
+    var threadTs = String(item.ts)
+    var ts = last && last.ts ? String(last.ts) : threadTs
+    result.rows.push({
+      id: String(conv.id),
+      kind: kind,
+      glyph: kindGlyph(kind),
+      name: name,
+      count: threadNew(item),
+      mention: item.mention === true,
+      latest: String(item.latest || ts),
+      root: rootText.length > 0 ? (rootBy.length > 0 ? rootBy + ": " + rootText : rootText) : "",
+      reply: reply,
+      ts: ts,
+      threadTs: threadTs,
     })
   }
   return result

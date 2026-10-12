@@ -12,8 +12,9 @@ slick is a fast, lightweight Slack client for the terminal, written in Rust
 - **Icon.** slick's mark in the bar (white with a faint outline by default,
   readable on light and dark bars). It is dimmed while slick is not running.
 - **Badges.** Red at the bottom-right counts unread messages in DMs and group
-  DMs. Blue at the top-right counts channel mentions and the unread channels
-  that notify you. A channel you muted or set to mentions only in Slack only
+  DMs, plus thread replies that mention you. Blue at the top-right counts
+  channel mentions, the unread channels that notify you and new replies in
+  the threads you follow. A channel you muted or set to mentions only in Slack only
   counts in the preview's footer. "Channel mentions only" in the menu narrows
   the blue badge and the rows to channels that mention you. A badge with
   nothing to count is not drawn.
@@ -23,6 +24,8 @@ slick is a fast, lightweight Slack client for the terminal, written in Rust
   unread messages ("Ana: can you review the PR?") with Slack's bold and italic
   and the workspace's own emoji (GIFs animated), mention count and how long ago.
   Click a conversation to jump straight to it in slick. Below them, the
+  threads you follow with new replies (where, the thread's first message and
+  its latest reply; a click opens the thread), then the
   reactions people put on your messages ("Ana reacted 👍 to your message"),
   which never add to the badges.
 - **Reaction bubbles.** A new reaction floats up out of the icon, Slack's
@@ -32,7 +35,7 @@ slick is a fast, lightweight Slack client for the terminal, written in Rust
   click shows it, another click puts it away without closing it, so it keeps
   running and counting.
 - **Menu (right click).** Launch on Login, Launch in Foreground, Open in
-  Scratchpad, Group notifications, Channel mentions only, Show reactions, pause notifications (30 minutes, 1 hour,
+  Scratchpad, Group notifications, Channel mentions only, Show threads, Show reactions, pause notifications (30 minutes, 1 hour,
   2 hours, until tomorrow, or until a day and time you pick) or resume them,
   and Quit slick.
 - **Pause notifications** uses Slack's own do-not-disturb, so the pause
@@ -95,7 +98,7 @@ in `~/.config/omarchy/shell.json`, e.g.
 | `badgeLayout` | `Split` | `Split` (red DMs + blue channels) or `Combined` (one red badge) |
 | `dmColor` | `#b65f4e` | DM badge color |
 | `channelColor` | `#467996` | Channel badge color |
-| `channelBadge` | `Unread` | What the blue badge counts: `Unread` (mentions and channels that notify you), `Mentions`, `All unread` or `None` |
+| `channelBadge` | `Unread` | What the blue badge counts: `Unread` (mentions, channels that notify you and thread replies), `Mentions`, `All unread` or `None` |
 | `badgeScale` | `0.45` | Dot size, as a fraction of the icon |
 | `tintWhenUnread` | `false` | Color the mark too (`Mono` and `Glyph` styles) |
 | `hideMode` | `Special workspace` | What a click on the open window does: park it, or `Never hide` |
@@ -107,9 +110,10 @@ in `~/.config/omarchy/shell.json`, e.g.
 | `hideWhenNotRunning` | `false` | Remove the icon while slick is not running |
 | `middleClickCloses` | `true` | Middle click quits slick |
 | `hoverPreview` | `true` | Show the preview on hover |
-| `previewRows` | `6` | Conversations in the preview, and reactions below them |
+| `previewRows` | `6` | Conversations in the preview, and threads and reactions below them |
 | `channelMentionsOnly` | `false` | Channels count only when they mention you: no row or blue badge for the ones that notify you |
 | `previewChannels` | `false` | Also list muted and mentions-only channels |
+| `showThreads` | `true` | List threads you follow with new replies and count those replies in the badges |
 | `showReactions` | `true` | List reactions to your messages and float new ones out of the icon |
 | `mutedIndicator` | `Bell` | While paused: `Bell`, `Dim` or `None` |
 
@@ -117,8 +121,8 @@ in `~/.config/omarchy/shell.json`, e.g.
 
 slick publishes what it knows to `$XDG_RUNTIME_DIR/slick/state.json`,
 rewriting it atomically whenever something changes: unread counts, the latest
-unread messages per conversation, reactions to your messages, and the
-do-not-disturb state. The widget
+unread messages per conversation, threads you follow with new replies,
+reactions to your messages, and the do-not-disturb state. The widget
 watches that file. It is ignored whenever no slick window is open, so a crash
 never leaves a stale badge behind.
 
