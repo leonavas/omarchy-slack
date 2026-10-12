@@ -814,7 +814,8 @@ BarWidget {
           var out = []
           if (root.preview.hidden > 0) out.push("+" + root.preview.hidden + " more")
           if (!root.previewChannels && root.totals.channels > 0)
-            out.push(root.totals.channels + (root.totals.channels === 1 ? " unread channel" : " unread channels"))
+            out.push("+" + root.totals.channels + (root.totals.channels === 1
+              ? " channel with unread messages, no mentions" : " channels with unread messages, no mentions"))
           return out
         }
         visible: parts.length > 0
