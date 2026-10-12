@@ -130,7 +130,20 @@ BarWidget {
 
   onRunningChanged: {
     stateFile.reload()
-    if (!root.running) return
+    if (!root.running) {
+      quitFallbackTimer.stop()
+      root.quitting = ""
+      return
+    }
+    // A window this widget launched unseen waits for slick to start, then
+    // goes away in one step (`stowUnseen`).
+    if (root.unseenLaunch) {
+      root.unseenLaunch = false
+      unseenTimer.focusTarget = root.lastOtherAddress
+      unseenTimer.ticks = 0
+      unseenTimer.restart()
+      return
+    }
     // A new slick window goes straight to the special workspace. `settled`
     // keeps a shell restart from yanking one that is already open.
     if (root.openInSpecial && settleTimer.settled) {
@@ -260,15 +273,67 @@ BarWidget {
     var lua = {}
     if (!root.launchForeground) lua.no_initial_focus = true
     if (Hyprland.usingLua === true) {
+      // Headed for the hidden scratchpad: the window shows up floating and
+      // all but transparent, so nothing on screen moves or flashes.
+      var unseen = root.openInSpecial && !root.launchForeground
+      if (unseen) lua.tag = "+" + root.unseenRule
+      root.unseenLaunch = unseen
       var rules = Object.keys(lua).map(function (k) {
         return k + " = " + (typeof lua[k] === "string" ? Model.luaString(lua[k]) : String(lua[k]))
       })
-      Util.execArgv(["hyprctl", "eval", "hl.exec_cmd(" + Model.luaString(cmd) + ", { " + rules.join(", ") + " })"])
+      Util.execArgv(["hyprctl", "eval", (unseen ? root.unseenRuleLua(true) + "; " : "")
+        + "hl.exec_cmd(" + Model.luaString(cmd) + ", { " + rules.join(", ") + " })"])
     } else {
       var legacy = []
       if (lua.no_initial_focus) legacy.push("noinitialfocus")
       Util.execArgv(["hyprctl", "dispatch", "exec", (legacy.length > 0 ? "[" + legacy.join(";") + "] " : "") + cmd])
     }
+  }
+
+  // Launched for the hidden scratchpad (Lua configs): the window opens on the
+  // current workspace floating and all but transparent, so nothing on screen
+  // moves. Opacity 0.01, not 0: a window Hyprland does not draw gets no
+  // frames, and Ghostty only starts slick after its first one. Once the title
+  // says the command runs, `stowUnseen` moves it in a single Lua call: the
+  // move may show the scratchpad (Hyprland refocuses into it), and hiding it
+  // again in the same call means no frame ever has it on screen. The rule is
+  // named and only on around a launch; switching it off gives the window its
+  // usual opacity back.
+  readonly property string unseenRule: "slick-launching"
+  property bool unseenLaunch: false
+  function unseenRuleLua(enabled) {
+    return "hl.window_rule({ name = " + Model.luaString(root.unseenRule) + ", enabled = " + enabled
+      + ", match = { tag = " + Model.luaString(root.unseenRule) + " }"
+      + (enabled ? ", float = true, opacity = \"0.01 0.01\", no_anim = true" : "") + " })"
+  }
+  Timer {
+    id: unseenTimer
+    property string focusTarget: ""
+    property int ticks: 0
+    interval: 50
+    repeat: true
+    onTriggered: {
+      ticks++
+      var title = root.window ? String(root.window.title || "") : ""
+      if (!root.running) { stop(); Util.execArgv(["hyprctl", "eval", root.unseenRuleLua(false)]); return }
+      if ((title.length === 0 || title === "Ghostty") && ticks < 80) return
+      stop()
+      root.stowUnseen(focusTarget)
+    }
+  }
+  function stowUnseen(focusTarget) {
+    var address = root.windowAddress()
+    var special = "special:" + root.specialName
+    var lua = []
+    if (address.length > 0) {
+      lua.push("hl.dispatch(hl.dsp.window.move({ window = " + Model.luaString(address) + ", workspace = " + Model.luaString(special) + ", silent = true }))")
+      lua.push("hl.dispatch(hl.dsp.window.float({ window = " + Model.luaString(address) + ", action = \"unset\" }))")
+    }
+    lua.push("local shown = hl.get_active_special_workspace()")
+    lua.push("if shown and shown.name == " + Model.luaString(special) + " then hl.dispatch(hl.dsp.workspace.toggle_special(" + Model.luaString(root.specialName) + ")) end")
+    if (focusTarget.length > 0) lua.push("hl.dispatch(hl.dsp.focus({ window = " + Model.luaString(focusTarget) + " }))")
+    lua.push(root.unseenRuleLua(false))
+    Util.execArgv(["hyprctl", "eval", lua.join("; ")])
   }
 
   function focusWindow() {
@@ -330,24 +395,32 @@ BarWidget {
   // Ask slick to quit, so it writes its goodbye; closing the window is the
   // fallback for a slick that refuses (an old one, without `slick quit`) or
   // does not answer.
+  // The fallback only ever closes the window it was asked to: a slick opened
+  // again within those 4 s is a new window, and must stay.
+  property string quitting: ""
   function quit() {
     if (!root.running) return
     if (root.stateLive && !quitProc.running) {
+      root.quitting = root.windowAddress()
       quitProc.running = true
       quitFallbackTimer.restart()
     } else {
       root.closeWindow()
     }
   }
+  function closeQuitting() {
+    if (root.quitting.length > 0 && root.quitting === root.windowAddress()) root.closeWindow()
+    root.quitting = ""
+  }
   Process {
     id: quitProc
     command: ["slick", "quit"]
-    onExited: function (code) { if (code !== 0) root.closeWindow() }
+    onExited: function (code) { if (code !== 0) root.closeQuitting() }
   }
   Timer {
     id: quitFallbackTimer
     interval: 4000
-    onTriggered: if (root.running) root.closeWindow()
+    onTriggered: root.closeQuitting()
   }
 
   // Left click: open it, bring it back, put it away.

@@ -58,12 +58,36 @@ never moves a slick that was already open.
 
 "Silent" is not enough there. Moving a window that just opened makes Hyprland
 refocus, and it may pick a window that lives in the scratchpad (another app
-parked there, or slick itself), which opens the scratchpad on screen. So a
-background launch checks 200 ms later with `hyprctl monitors -j`: if the
-scratchpad is showing it is hidden again and the focus goes back to the last
-regular window you used. Measured: the window and the scratchpad flash for
-about 200 ms, and slick is running in the hidden scratchpad well within a
-second.
+parked there, or slick itself), which opens the scratchpad on screen. Moved
+too early, before Ghostty's first frame, the window also lands in the hidden
+scratchpad before slick started, and only that scratchpad showing up lets it
+start.
+
+On Lua configs a background launch into the scratchpad therefore goes like
+this (`unseenRule`, `stowUnseen`):
+
+- A named window rule, `slick-launching`, is switched on and the command gets
+  the `slick-launching` tag: the window opens floating (nothing else on the
+  workspace moves), without animation and at opacity 0.01. Not 0: Hyprland
+  does not draw a fully transparent window, it gets no frames, and Ghostty
+  never starts slick.
+- The widget waits for the title to stop being "Ghostty" (slick started; at
+  most 4 s), then sends one `hyprctl eval`: move it silently into the
+  scratchpad, tile it, hide the scratchpad if the move showed it, focus the
+  last regular window you used, and switch the rule off, which gives the
+  window its usual opacity back. All in one call, so no frame ever has the
+  scratchpad on screen. Measured: about 4 ms between it showing and hiding.
+
+Older configs keep the earlier fallback: the window flashes on the current
+workspace, and 200 ms later `hyprctl monitors -j` tells whether the scratchpad
+is showing, to hide it and give the focus back.
+
+## Quitting
+
+`slick quit` lets slick write its goodbye; if it fails or slick is still there
+4 s later, the widget closes the window. That fallback remembers which window
+it was asked to close and stops when that one goes: a slick opened again
+within the 4 s is a new window and stays.
 
 ## Opening a conversation
 
