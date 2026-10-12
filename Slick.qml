@@ -156,7 +156,7 @@ BarWidget {
 
   // Two counts, two corners. A manual pause hides both; Slack's scheduled
   // DND does not.
-  readonly property bool badgesOn: !root.muted && root.badgeStyle !== "None"
+  readonly property bool badgesOn: !root.muted && root.badgeStyle !== "None" && !root.notInstalled
   readonly property int dmCount: root.badgesOn ? Model.directMessages(root.slickState) : 0
   readonly property int channelCount: root.badgesOn ? Model.channelBadgeCount(root.slickState, root.channelBadgeMode) : 0
   readonly property bool anyBadge: root.dmCount > 0 || root.channelCount > 0
@@ -352,8 +352,54 @@ BarWidget {
   onMenuOpenChanged: {
     if (!menuOpen) return
     root.popupOpen = false
-    if (!root.stateLive && !dndStatus.running) dndStatus.running = true
+    if (root.notInstalled) root.checkInstalled()
+    else if (!root.stateLive && !dndStatus.running) dndStatus.running = true
   }
+
+  // ---------------------------------------------------------- not installed
+  //
+  // Without a `slick` on PATH the widget turns into a way to get it: a dimmed
+  // mark, and a card with the install command. Assumed installed until the
+  // first check says otherwise, so the bar does not flash the empty state at
+  // login; re-checked every 30 s while missing, so an install is picked up
+  // without restarting the shell.
+  readonly property string installCommand: "curl -fsSL https://slick.leonavas.com/install.sh | sh"
+  readonly property string websiteUrl: "https://slick.leonavas.com"
+  property bool installed: true
+  readonly property bool notInstalled: !root.installed && !root.running
+
+  function checkInstalled() {
+    if (!installCheck.running) installCheck.running = true
+  }
+  Process {
+    id: installCheck
+    command: ["bash", "-lc", "command -v slick >/dev/null"]
+    onExited: function (code) { root.installed = code === 0 }
+  }
+  Component.onCompleted: root.checkInstalled()
+  Timer {
+    interval: 30000
+    repeat: true
+    running: !root.installed
+    onTriggered: root.checkInstalled()
+  }
+
+  property bool copied: false
+  Timer {
+    id: copiedTimer
+    interval: 1500
+    onTriggered: root.copied = false
+  }
+  function copyInstallCommand() {
+    Util.execArgv(["wl-copy", root.installCommand])
+    root.copied = true
+    copiedTimer.restart()
+  }
+  function installInTerminal() {
+    Util.execArgv(["omarchy-launch-tui", "--app-id=org.omarchy.slick-install", "bash", "-c",
+      root.installCommand + '; echo; read -n1 -rsp "Press any key to close"'])
+  }
+  function openWebsite() { Util.execArgv(["xdg-open", root.websiteUrl]) }
 
   // `slick dnd` talks to Slack itself, so pausing works with slick closed.
   // Whether a pause is on then comes from `slick dnd status` ("notifications
@@ -369,7 +415,8 @@ BarWidget {
 
   // Available whenever slick is running and publishing, empty or not, muted
   // or not: "nothing waiting" is an answer worth hovering for.
-  readonly property bool previewAvailable: root.hoverPreview && root.stateLive && !root.menuOpen
+  readonly property bool previewAvailable: ((root.hoverPreview && root.stateLive) || root.notInstalled)
+    && !root.menuOpen
   readonly property bool previewHovered: button.tooltipHovered || popup.containsMouse
 
   onPreviewAvailableChanged: if (!previewAvailable) root.popupOpen = false
@@ -382,7 +429,11 @@ BarWidget {
       if (root.popupOpen) closePreviewTimer.restart()
     }
   }
-  onPopupOpenChanged: if (popupOpen) root.nowSec = Date.now() / 1000
+  onPopupOpenChanged: {
+    if (!popupOpen) return
+    root.nowSec = Date.now() / 1000
+    if (root.notInstalled) root.checkInstalled()
+  }
 
   Timer {
     id: openPreviewTimer
@@ -428,13 +479,18 @@ BarWidget {
       : root.iconStyle === "Color" ? colorIcon : outlineIcon
     active: root.anyBadge
     useActiveColor: root.tintWhenUnread
-    dimmed: (!root.running && root.dimWhenClosed) || (root.muted && root.mutedIndicator === "Dim")
+    dimmed: root.notInstalled || (!root.running && root.dimWhenClosed)
+      || (root.muted && root.mutedIndicator === "Dim")
     tooltipText: root.previewAvailable ? "" : root.tooltip
     onPressed: function(mouseButton) {
       if (mouseButton === Qt.MiddleButton) {
-        if (root.closeOnMiddle) root.quit()
+        if (root.closeOnMiddle && !root.notInstalled) root.quit()
       } else if (mouseButton === Qt.RightButton) {
         root.menuOpen = !root.menuOpen
+      } else if (root.notInstalled) {
+        // Nothing to launch: the left button opens the install card.
+        root.menuOpen = false
+        root.popupOpen = true
       } else {
         root.toggle()
       }
@@ -620,15 +676,129 @@ BarWidget {
     open: root.popupOpen
     triggerMode: "hover"
     contentWidth: popup.fittedContentWidth(Style.space(400))
-    contentHeight: popup.fittedContentHeight(previewColumn.implicitHeight)
+    contentHeight: popup.fittedContentHeight(root.notInstalled ? installColumn.implicitHeight
+                                                               : previewColumn.implicitHeight)
 
     readonly property color fg: root.bar ? root.bar.foreground : Color.foreground
     readonly property color dim: Qt.rgba(popup.fg.r, popup.fg.g, popup.fg.b, 0.6)
+
+    // slick not installed: what it is and how to get it.
+    Column {
+      id: installColumn
+      anchors.fill: parent
+      spacing: Style.space(8)
+      visible: root.notInstalled
+
+      Text {
+        text: "slick not detected"
+        color: popup.fg
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.bodySmall
+        font.bold: true
+      }
+
+      Text {
+        width: parent.width
+        text: "slick is a fast Slack client for the terminal. Install it with:"
+        color: popup.dim
+        wrapMode: Text.Wrap
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.bodySmall
+      }
+
+      // The command, in a box; a click copies it.
+      Rectangle {
+        width: parent.width
+        height: commandText.implicitHeight + Style.space(14)
+        radius: Style.spacing.labelGap
+        color: Qt.rgba(popup.fg.r, popup.fg.g, popup.fg.b, copyArea.containsMouse ? 0.14 : 0.08)
+
+        Text {
+          id: commandText
+          anchors.left: parent.left
+          anchors.right: copyHint.left
+          anchors.leftMargin: Style.space(8)
+          anchors.rightMargin: Style.space(8)
+          anchors.verticalCenter: parent.verticalCenter
+          text: root.installCommand
+          color: popup.fg
+          wrapMode: Text.WrapAnywhere
+          font.family: "monospace"
+          font.pixelSize: Style.font.caption
+        }
+
+        Text {
+          id: copyHint
+          anchors.right: parent.right
+          anchors.rightMargin: Style.space(8)
+          anchors.verticalCenter: parent.verticalCenter
+          text: root.copied ? "Copied" : "Copy"
+          color: root.copied ? popup.fg : popup.dim
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+          font.bold: root.copied
+        }
+
+        MouseArea {
+          id: copyArea
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.copyInstallCommand()
+        }
+      }
+
+      Row {
+        spacing: Style.space(12)
+
+        Text {
+          text: "Install in terminal"
+          color: popup.fg
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.bodySmall
+          font.bold: true
+          font.underline: installArea.containsMouse
+
+          MouseArea {
+            id: installArea
+            anchors.fill: parent
+            anchors.margins: -Style.space(3)
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+              root.popupOpen = false
+              root.installInTerminal()
+            }
+          }
+        }
+
+        Text {
+          text: "slick.leonavas.com"
+          color: siteArea.containsMouse ? popup.fg : popup.dim
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.bodySmall
+          font.underline: true
+
+          MouseArea {
+            id: siteArea
+            anchors.fill: parent
+            anchors.margins: -Style.space(3)
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+              root.popupOpen = false
+              root.openWebsite()
+            }
+          }
+        }
+      }
+    }
 
     Column {
       id: previewColumn
       anchors.fill: parent
       spacing: Style.space(6)
+      visible: !root.notInstalled
 
       Text {
         width: parent.width
@@ -895,105 +1065,136 @@ BarWidget {
       anchors.fill: parent
       spacing: Style.space(2)
 
+      // slick not installed: only the ways to get it.
       MenuEntry {
-        label: !root.running ? "Open slick"
-          : root.parked && !root.specialShown ? "Show slick"
-          : (root.focused && root.hideMode === "Special workspace") ? "Hide slick"
-          : "Focus slick"
-        onActivated: {
-          root.close()
-          root.toggle()
-        }
+        visible: root.notInstalled
+        label: root.copied ? "Copied" : "Copy install command"
+        onActivated: root.copyInstallCommand()
       }
 
-      PanelSeparator { foreground: menu.fg }
-
-      // Closed before the write: saving shell.json can rebuild the bar's
-      // widgets, and a menu owned by a destroyed widget dies mid-click.
       MenuEntry {
-        label: "Launch on Login"
-        showCheck: true
-        checked: root.autoStart
+        visible: root.notInstalled
+        label: "Install in terminal"
         onActivated: {
           root.close()
-          root.writeSetting("autoStart", !root.autoStart)
+          root.installInTerminal()
         }
       }
 
       MenuEntry {
-        label: "Launch in Foreground"
-        showCheck: true
-        checked: root.launchForeground
+        visible: root.notInstalled
+        label: "Open slick.leonavas.com"
         onActivated: {
           root.close()
-          root.writeSetting("launchForeground", !root.launchForeground)
+          root.openWebsite()
         }
       }
 
-      MenuEntry {
-        label: "Open in Scratchpad"
-        showCheck: true
-        checked: root.openInSpecial
-        onActivated: {
-          root.close()
-          root.writeSetting("openInSpecial", !root.openInSpecial)
-        }
-      }
-
-      MenuEntry {
-        label: "Group notifications"
-        showCheck: true
-        checked: root.combinedBadge
-        onActivated: {
-          root.close()
-          root.writeSetting("badgeLayout", root.combinedBadge ? "Split" : "Combined")
-        }
-      }
-
-      PanelSeparator { foreground: menu.fg }
-
-      MenuEntry {
-        visible: root.stateLive ? root.dndActive : root.offlinePaused
-        label: "Resume notifications"
-        onActivated: {
-          root.close()
-          root.resume()
-        }
-      }
-
-      MenuEntry {
-        label: "Pause notifications"
-        clickable: false
-      }
-
-      Repeater {
-        model: [
-          { label: "30 minutes", minutes: 30 },
-          { label: "1 hour", minutes: 60 },
-          { label: "2 hours", minutes: 120 },
-          { label: "Until tomorrow", minutes: -1 },
-        ]
+      Column {
+        width: parent.width
+        spacing: Style.space(2)
+        visible: !root.notInstalled
 
         MenuEntry {
-          required property var modelData
-          label: modelData.label
-          indent: Style.space(10)
+          label: !root.running ? "Open slick"
+            : root.parked && !root.specialShown ? "Show slick"
+            : (root.focused && root.hideMode === "Special workspace") ? "Hide slick"
+            : "Focus slick"
           onActivated: {
             root.close()
-            root.pause(modelData.minutes > 0 ? modelData.minutes
-                                             : Model.minutesUntilTomorrow(Date.now() / 1000))
+            root.toggle()
           }
         }
-      }
 
-      PanelSeparator { foreground: menu.fg }
+        PanelSeparator { foreground: menu.fg }
 
-      MenuEntry {
-        label: "Quit slick"
-        enabled: root.running
-        onActivated: {
-          root.close()
-          root.quit()
+        // Closed before the write: saving shell.json can rebuild the bar's
+        // widgets, and a menu owned by a destroyed widget dies mid-click.
+        MenuEntry {
+          label: "Launch on Login"
+          showCheck: true
+          checked: root.autoStart
+          onActivated: {
+            root.close()
+            root.writeSetting("autoStart", !root.autoStart)
+          }
+        }
+
+        MenuEntry {
+          label: "Launch in Foreground"
+          showCheck: true
+          checked: root.launchForeground
+          onActivated: {
+            root.close()
+            root.writeSetting("launchForeground", !root.launchForeground)
+          }
+        }
+
+        MenuEntry {
+          label: "Open in Scratchpad"
+          showCheck: true
+          checked: root.openInSpecial
+          onActivated: {
+            root.close()
+            root.writeSetting("openInSpecial", !root.openInSpecial)
+          }
+        }
+
+        MenuEntry {
+          label: "Group notifications"
+          showCheck: true
+          checked: root.combinedBadge
+          onActivated: {
+            root.close()
+            root.writeSetting("badgeLayout", root.combinedBadge ? "Split" : "Combined")
+          }
+        }
+
+        PanelSeparator { foreground: menu.fg }
+
+        MenuEntry {
+          visible: root.stateLive ? root.dndActive : root.offlinePaused
+          label: "Resume notifications"
+          onActivated: {
+            root.close()
+            root.resume()
+          }
+        }
+
+        MenuEntry {
+          label: "Pause notifications"
+          clickable: false
+        }
+
+        Repeater {
+          model: [
+            { label: "30 minutes", minutes: 30 },
+            { label: "1 hour", minutes: 60 },
+            { label: "2 hours", minutes: 120 },
+            { label: "Until tomorrow", minutes: -1 },
+          ]
+
+          MenuEntry {
+            required property var modelData
+            label: modelData.label
+            indent: Style.space(10)
+            onActivated: {
+              root.close()
+              root.pause(modelData.minutes > 0 ? modelData.minutes
+                                               : Model.minutesUntilTomorrow(Date.now() / 1000))
+            }
+          }
+        }
+
+        PanelSeparator { foreground: menu.fg }
+
+        MenuEntry {
+          label: "Quit slick"
+          enabled: root.running
+          onActivated: {
+            root.close()
+            root.quit()
+          }
         }
       }
     }

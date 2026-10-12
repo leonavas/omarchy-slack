@@ -81,3 +81,12 @@ holes. Regenerate it from the white mark rather than editing it by hand.
 pause entries stay enabled when slick is not running. Without a live state
 file, the menu asks `slick dnd status` when it opens to decide whether to
 offer Resume.
+
+## slick not installed
+
+`command -v slick` runs through `bash -lc`, the same login shell every slick
+call goes through, so "detected" means "the widget can run it". The widget
+assumes slick is installed until the first check answers, so the empty state
+never flashes at login. While slick is missing it checks again every 30 s and
+whenever the card or the menu opens. A slick window that is open counts as
+installed whatever the check says.

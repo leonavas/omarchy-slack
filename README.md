@@ -1,92 +1,128 @@
-# leonavas.slick
+# slick for the Omarchy bar
 
-[slick](https://github.com/leonavas/slick), the Slack TUI, as a tray-style icon
-in the Omarchy bar. Click to open it, click again to park it out of sight
-without closing it, red and blue badges for unread DMs and channel mentions,
-and a preview of them when you hover the icon.
+A bar widget for [Omarchy](https://omarchy.org) that puts
+[slick](https://slick.leonavas.com) in your bar the way a tray icon would.
+slick is a fast, lightweight Slack client for the terminal, written in Rust
+([source](https://github.com/leonavas/slick)).
+
+## What it does
+
+- **Icon.** slick's mark in the bar (white with a faint outline by default,
+  readable on light and dark bars). It is dimmed while slick is not running.
+- **Badges.** Red at the bottom-right counts unread messages in DMs and group
+  DMs. Blue at the top-right counts messages that mention you in channels. A
+  badge with nothing to count is not drawn.
+- **Combined mode.** "Group notifications" in the menu folds both into one
+  red badge with their sum.
+- **Hover preview.** Hover the icon to see the unread conversations: who, the
+  last message ("Ana: can you review the PR?"), mention count and how long ago.
+  Click a conversation to jump straight to it in slick.
+- **Scratchpad parking.** slick lives in Omarchy's scratchpad (SUPER+S). A
+  click shows it, another click puts it away without closing it, so it keeps
+  running and counting.
+- **Menu (right click).** Launch on Login, Launch in Foreground, Open in
+  Scratchpad, Group notifications, pause notifications (30 minutes, 1 hour,
+  2 hours, until tomorrow) or resume them, and Quit slick.
+- **Pause notifications** uses Slack's own do-not-disturb, so the pause
+  follows your account to every client and works even with slick closed.
+  While a pause you set is on, the badges give way to a small bell-off mark.
+  Slack's scheduled night-time DND keeps the badges.
+- **Not installed?** Without slick on your `PATH`, the icon dims and its card
+  shows the install command, with buttons to copy it or run it in a terminal.
+  The widget picks slick up on its own once installed.
+
+| Mouse | Action |
+|---|---|
+| Left click | Open slick, show it, or put it away |
+| Middle click | Quit slick |
+| Right click | The menu |
+| Hover | Preview of unread conversations |
 
 ## Requirements
 
-slick on `PATH`, recent enough to publish its state file
-(`$XDG_RUNTIME_DIR/slick/state.json`) and answer `slick open`, `slick quit` and
-`slick dnd`.
+- Omarchy, with its shell (the Quickshell bar).
+- slick installed and on your `PATH`:
 
-## Installing
+  ```bash
+  curl -fsSL https://slick.leonavas.com/install.sh | sh
+  ```
+
+  See [slick.leonavas.com](https://slick.leonavas.com) for details.
+
+## Install
 
 ```bash
 omarchy plugin add https://github.com/leonavas/omarchy-slick.git
 omarchy plugin enable leonavas.slick --section right
 ```
 
-## Using it
-
-| Action | What it does |
-|---|---|
-| Left click | Open slick, bring it back, or put it away |
-| Middle click | Quit slick |
-| Right click | Menu: show/hide, Launch on Login, Launch in Foreground, Open in Scratchpad, Group notifications, pause or resume notifications, Quit slick |
-| Hover | Unread conversations; click one to jump to it |
-
-Hiding does not close slick: the window lives in `special:scratchpad` (Omarchy's
-SUPER+S), where it keeps running and counting.
-
-**The badges** come in slick's own colors. Red, bottom-right: unread messages
-in DMs and group DMs. Blue, top-right: messages that mention you in channels
-(or every unread channel, with `channelBadge` set to `All unread`). A badge
-with nothing to count is not drawn. "Group notifications" in the menu
-(`badgeLayout: Combined`) folds both into one red badge with their sum.
-
-**Pausing notifications** uses Slack's own do-not-disturb, so it follows your
-account to every client, and works from the menu even with slick closed. While a pause you set is running the badges are
-replaced by a small bell-off mark. Slack's scheduled night-time DND does not
-hide them.
-
-**The preview** lists DMs, group DMs and channels that mention you, newest
-first, with the last unread message ("Ana: can you review the PR?"), the
-mention count and how long ago it arrived. Other unread channels are only
-counted at the bottom, unless `previewChannels` is on. While notifications are
-paused the top line says until when, with a Resume link.
+To update later: `omarchy plugin update leonavas.slick`, then
+`omarchy restart shell`.
 
 ## Settings
 
-All in the bar widget's settings panel, or inline in `~/.config/omarchy/shell.json`:
+Change them in the bar's widget settings panel, or inline on the widget's entry
+in `~/.config/omarchy/shell.json`, e.g.
+`{ "id": "leonavas.slick", "badgeLayout": "Combined" }`.
 
-| Key | Default | |
+| Key | Default | What it does |
 |---|---|---|
-| `launchCommand` | `""` | Empty runs `omarchy-launch-tui slick` (falls back to `xdg-terminal-exec`) |
-| `windowClass` | `org.omarchy.slick` | The window the widget drives; also the app id it launches with |
-| `iconStyle` | `Outline` | `Outline` (white mark, faint dark edge), `Color`, `Mono` (white mark tinted like a glyph) or `Glyph` |
-| `glyph`, `glyphSize`, `glyphOffsetY` | `󰒱`, `0`, `0` | Only for the `Glyph` style |
+| `launchCommand` | `""` | Empty runs `omarchy-launch-tui --app-id=<windowClass> slick`. Anything else must open a window with class `windowClass` |
+| `windowClass` | `org.omarchy.slick` | The slick window the widget drives |
+| `iconStyle` | `Outline` | `Outline`, `Color` (colored mark), `Mono` (tinted like the bar's glyphs) or `Glyph` |
+| `glyph` | `󰒱` | Nerd Font character for the `Glyph` style |
+| `glyphSize` | `0` | Glyph size in px; 0 follows the bar |
+| `glyphOffsetY` | `0` | Vertical nudge for the glyph, in px |
 | `badge` | `Count` | `Count`, `Dot` or `None` |
-| `badgeLayout` | `Split` | `Split` (two badges) or `Combined` (one red badge with the sum) |
-| `channelBadge` | `Mentions` | `Mentions`, `All unread` or `None` |
-| `dmColor` | `#b65f4e` | DM badge |
-| `channelColor` | `#467996` | Channel badge |
-| `badgeScale` | `0.45` | Dot size |
-| `tintWhenUnread` | `false` | Color the mark too (`Mono` and `Glyph`) |
-| `hideMode` | `Special workspace` | Or `Never hide` |
-| `specialWorkspace` | `scratchpad` | Used as `special:<name>` |
-| `openInSpecial` | `true` | New slick windows go straight to the special workspace |
-| `autoStart` | `false` | Open slick when the shell starts |
-| `launchForeground` | `true` | Show and focus slick when it opens; off, it opens hidden in the scratchpad, also from the icon |
-| `dimWhenClosed` | `true` | |
-| `hideWhenNotRunning` | `false` | |
-| `middleClickCloses` | `true` | |
-| `hoverPreview` | `true` | |
-| `previewRows` | `6` | |
-| `previewChannels` | `false` | Give every unread channel a row |
-| `mutedIndicator` | `Bell` | `Bell`, `Dim` or `None` while paused |
+| `badgeLayout` | `Split` | `Split` (red DMs + blue channels) or `Combined` (one red badge) |
+| `dmColor` | `#b65f4e` | DM badge color |
+| `channelColor` | `#467996` | Channel badge color |
+| `channelBadge` | `Mentions` | What the blue badge counts: `Mentions`, `All unread` or `None` |
+| `badgeScale` | `0.45` | Dot size, as a fraction of the icon |
+| `tintWhenUnread` | `false` | Color the mark too (`Mono` and `Glyph` styles) |
+| `hideMode` | `Special workspace` | What a click on the open window does: park it, or `Never hide` |
+| `specialWorkspace` | `scratchpad` | The special workspace slick parks in |
+| `openInSpecial` | `true` | slick opens straight into that workspace |
+| `autoStart` | `false` | Open slick when the shell starts (Launch on Login) |
+| `launchForeground` | `true` | Show and focus slick when it opens; off, it opens hidden |
+| `dimWhenClosed` | `true` | Dim the icon while slick is not running |
+| `hideWhenNotRunning` | `false` | Remove the icon while slick is not running |
+| `middleClickCloses` | `true` | Middle click quits slick |
+| `hoverPreview` | `true` | Show the preview on hover |
+| `previewRows` | `6` | Conversations in the preview |
+| `previewChannels` | `false` | Also list unread channels without a mention |
+| `mutedIndicator` | `Bell` | While paused: `Bell`, `Dim` or `None` |
 
-## Files
+## How it works
 
-| File | Contents |
-|---|---|
-| `Slick.qml` | The bar widget |
-| `Model.js` | Pure helpers: window lookup, state parsing, preview rows |
-| `manifest.json` | Metadata and settings schema |
-| `assets/` | slick's mark: color, white, and white with an outline |
+slick publishes what it knows to `$XDG_RUNTIME_DIR/slick/state.json`,
+rewriting it atomically whenever something changes: unread counts, the latest
+unread messages per conversation, and the do-not-disturb state. The widget
+watches that file. It is ignored whenever no slick window is open, so a crash
+never leaves a stale badge behind.
 
-[`NOTES.md`](NOTES.md) has the decisions that are not obvious from the code.
+Actions go back through slick's command line:
+
+- `slick open <conversation> [ts] [--thread <ts>]`: jump to a conversation
+- `slick quit`: close slick
+- `slick dnd pause <minutes>`, `slick dnd resume`, `slick dnd status`
+
+The file format is documented in
+[docs/events.md](https://github.com/leonavas/slick/blob/master/docs/events.md).
+[`NOTES.md`](NOTES.md) has the design decisions that are not obvious from the
+code.
+
+## Troubleshooting
+
+- **Changes to the plugin do not show up.** After updating or editing the
+  plugin, run `omarchy restart shell`. The shell's own reload keeps running
+  the old code.
+- **Two slick icons.** slick also has a tray icon of its own. Turn it off with
+  `tray = false` in `~/.config/slick/config`.
+- **No badges or preview.** Check that slick is running and that
+  `$XDG_RUNTIME_DIR/slick/state.json` exists. The widget only trusts it while
+  a window of class `org.omarchy.slick` is open, so a slick started some other
+  way needs `windowClass` set to its class.
 
 ## License
 
