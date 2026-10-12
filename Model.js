@@ -101,14 +101,21 @@ function attention(state) {
   return state ? countOf(state.attention) : 0
 }
 
-function totals(state) {
+// `mentionsOnly` (the "Channel mentions only" setting) treats every unread
+// channel without a mention as quiet, as before slick told them apart.
+function totals(state, mentionsOnly) {
   var t = state && state.totals && typeof state.totals === "object" ? state.totals : {}
+  var known = t.channels_quiet !== undefined && !mentionsOnly
   return {
     mentions: countOf(t.mentions),
     dms: countOf(t.dms),
     groups: countOf(t.groups),
     channels: countOf(t.channels),
     channelsMentioned: countOf(t.channels_mentioned),
+    // Unread channels without a mention that are muted or set to mentions
+    // only. A slick from before this field: all of them, as it was then.
+    channelsQuiet: known ? countOf(t.channels_quiet) : countOf(t.channels),
+    quietKnown: known,
   }
 }
 
@@ -148,12 +155,16 @@ function channelMentions(state) {
   return total
 }
 
-// The channel badge's number for the `channelBadge` setting: "Mentions",
-// "All unread" (mentions plus unread channels without one) or "None".
-function channelBadgeCount(state, mode) {
+// The channel badge's number for the `channelBadge` setting: "Unread"
+// (mentions plus unread channels that notify you: not muted, not set to
+// mentions only), "Mentions", "All unread" (mentions plus every unread
+// channel) or "None".
+function channelBadgeCount(state, mode, mentionsOnly) {
   if (mode === "None") return 0
   var count = channelMentions(state)
-  if (mode === "All unread") count += totals(state).channels
+  var t = totals(state, mentionsOnly)
+  if (mode === "All unread") count += t.channels
+  else if (mode !== "Mentions") count += Math.max(0, t.channels - t.channelsQuiet)
   return count
 }
 
@@ -288,20 +299,91 @@ function kindGlyph(kind) {
 
 // Does a conversation belong in the preview? DMs and group DMs always do;
 // channels only with a mention, unless every unread channel was asked for.
-function eligible(conv, includeChannels) {
+// DMs, group DMs, channels that mention you and channels that notify you
+// get a row; muted or mentions-only channels only count in the footer.
+function eligible(conv, includeChannels, mentionsOnly) {
   var kind = kindOf(conv.kind)
   if (kind === "dm" || kind === "group") return true
-  return includeChannels || countOf(conv.mentions) > 0
+  return includeChannels || countOf(conv.mentions) > 0 || (!mentionsOnly && conv.quiet === false)
 }
 
 function oneLine(text) {
   return String(text || "").replace(/\s+/g, " ").trim()
 }
 
+// Text made safe to show as StyledText.
+function escapeHtml(text) {
+  return String(text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+}
+
+var STYLE_TAGS = { b: true, i: true, s: true }
+
+// A message as tokens for a Flow: { kind: "text", html } per word, its
+// style kept, and { kind: "img", src, animated } per custom emoji. The HTML
+// is slick's `html` (escaped, only <b>, <i>, <s> and <img> of its own saved
+// emoji), else the plain text escaped here: nothing a message says becomes
+// markup, and an image only ever comes from a local file.
+function messageTokens(message, prefix) {
+  var html = message && typeof message.html === "string" ? message.html : escapeHtml(message ? message.text : "")
+  html = escapeHtml(prefix || "") + html.replace(/\s+/g, " ").trim()
+  var tokens = []
+  var open = []
+  var word = ""
+  function flush() {
+    if (word.length === 0) return
+    var opening = open.map(function (t) { return "<" + t + ">" }).join("")
+    var closing = open.slice().reverse().map(function (t) { return "</" + t + ">" }).join("")
+    tokens.push({ kind: "text", html: opening + word + closing + "&nbsp;", src: "", animated: false })
+    word = ""
+  }
+  var i = 0
+  while (i < html.length) {
+    var c = html[i]
+    if (c === " ") { flush(); i++; continue }
+    if (c === "<") {
+      var end = html.indexOf(">", i)
+      if (end < 0) break
+      var tag = html.slice(i + 1, end)
+      var name = tag.replace(/^\//, "").split(/\s/)[0].toLowerCase()
+      if (STYLE_TAGS[name]) {
+        // A word split by a tag ("ab<b>cd</b>") stays one word.
+        if (word.length > 0) {
+          var o = open.map(function (t) { return "<" + t + ">" }).join("")
+          var cl = open.slice().reverse().map(function (t) { return "</" + t + ">" }).join("")
+          tokens.push({ kind: "text", html: o + word + cl, src: "", animated: false })
+          word = ""
+        }
+        if (tag[0] === "/") {
+          var at = open.lastIndexOf(name)
+          if (at >= 0) open.splice(at, 1)
+        } else {
+          open.push(name)
+        }
+      } else if (name === "img") {
+        flush()
+        var src = (tag.match(/src="([^"]*)"/) || [])[1] || ""
+        src = src.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
+        if (src.indexOf("file://") === 0) {
+          tokens.push({ kind: "img", html: "", src: src, animated: /\.gif$/i.test(src) })
+        } else {
+          var alt = (tag.match(/alt="([^"]*)"/) || [])[1] || ""
+          if (alt.length > 0) tokens.push({ kind: "text", html: alt + "&nbsp;", src: "", animated: false })
+        }
+      }
+      i = end + 1
+      continue
+    }
+    word += c
+    i++
+  }
+  flush()
+  return tokens
+}
+
 // The rows the hover popup renders, already trimmed so the QML side can trust
 // every field to exist. Returns { rows, hidden } where hidden counts eligible
 // conversations past the row cap.
-function previewRows(state, max, includeChannels) {
+function previewRows(state, max, includeChannels, mentionsOnly) {
   var result = { rows: [], hidden: 0 }
   if (!state) return result
   var limit = Math.max(1, Number(max) || 6)
@@ -309,7 +391,7 @@ function previewRows(state, max, includeChannels) {
   for (var i = 0; i < list.length; i++) {
     var conv = list[i]
     if (!conv || typeof conv !== "object" || !conv.id) continue
-    if (!eligible(conv, includeChannels)) continue
+    if (!eligible(conv, includeChannels, mentionsOnly)) continue
     if (result.rows.length >= limit) { result.hidden += 1; continue }
     var kind = kindOf(conv.kind)
     var name = String(conv.name || conv.id).trim()
@@ -320,6 +402,20 @@ function previewRows(state, max, includeChannels) {
     // In a DM the author is the conversation's name; saying it twice wastes
     // the line the message needs.
     var showAuthor = author.length > 0 && !(kind === "dm" && author === name)
+    // Every unread message slick sent, oldest first; the author only where
+    // it changes, and never in a DM with that person.
+    var lines = []
+    var lastAuthor = ""
+    for (var m = 0; m < messages.length; m++) {
+      var msg = messages[m]
+      if (!msg || typeof msg !== "object") continue
+      var by = String(msg.author || "").trim()
+      var prefixed = by.length > 0 && by !== lastAuthor && !(kind === "dm" && by === name)
+      var tokens = messageTokens(msg, prefixed ? by + ": " : "")
+      if (tokens.length === 0) continue
+      lines.push({ tokens: tokens })
+      lastAuthor = by
+    }
     var ts = last && last.ts ? String(last.ts) : String(conv.latest || "")
     var threadTs = last && last.thread_ts ? String(last.thread_ts) : ""
     result.rows.push({
@@ -331,6 +427,7 @@ function previewRows(state, max, includeChannels) {
       unread: conv.unread !== false,
       latest: String(conv.latest || ts),
       line: text.length > 0 ? (showAuthor ? author + ": " + text : text) : "",
+      messages: lines,
       ts: ts,
       threadTs: threadTs !== ts ? threadTs : "",
     })

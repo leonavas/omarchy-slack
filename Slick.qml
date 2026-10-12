@@ -23,7 +23,7 @@ BarWidget {
   readonly property int glyphSize: Math.max(0, Number(setting("glyphSize", 0)))
   readonly property real glyphOffsetY: Number(setting("glyphOffsetY", 0))
   readonly property string badgeStyle: String(setting("badge", "Count"))
-  readonly property string channelBadgeMode: String(setting("channelBadge", "Mentions"))
+  readonly property string channelBadgeMode: String(setting("channelBadge", "Unread"))
   readonly property bool combinedBadge: String(setting("badgeLayout", "Split")) === "Combined"
   readonly property string dmColorSetting: String(setting("dmColor", "#b65f4e"))
   readonly property string channelColorSetting: String(setting("channelColor", "#467996"))
@@ -41,6 +41,9 @@ BarWidget {
   readonly property int previewRows: Math.max(1, Number(setting("previewRows", 6)))
   readonly property bool previewChannels: setting("previewChannels", false) === true
   readonly property bool showReactions: setting("showReactions", true) !== false
+  // Channels count only when they mention you: no blue badge or row for the
+  // channels that notify you, all of them in the footer.
+  readonly property bool channelMentionsOnly: setting("channelMentionsOnly", false) === true
   readonly property string mutedIndicator: String(setting("mutedIndicator", "Bell"))
 
   // ------------------------------------------------------------------- theme
@@ -82,10 +85,10 @@ BarWidget {
   }
 
   readonly property int attention: Model.attention(root.slickState)
-  readonly property var totals: Model.totals(root.slickState)
+  readonly property var totals: Model.totals(root.slickState, root.channelMentionsOnly)
   readonly property bool muted: Model.snoozed(root.slickState, root.nowSec)
   readonly property bool dndActive: Model.dndActive(root.slickState, root.nowSec)
-  readonly property var preview: Model.previewRows(root.slickState, root.previewRows, root.previewChannels)
+  readonly property var preview: Model.previewRows(root.slickState, root.previewRows, root.previewChannels, root.channelMentionsOnly)
   // Reactions to your messages: listed in the card, never counted in a badge.
   readonly property var reactions: root.showReactions
     ? Model.reactionRows(root.slickState, root.previewRows) : ({ rows: [], hidden: 0 })
@@ -222,7 +225,7 @@ BarWidget {
   // DND does not.
   readonly property bool badgesOn: !root.muted && root.badgeStyle !== "None" && !root.notInstalled
   readonly property int dmCount: root.badgesOn ? Model.directMessages(root.slickState) : 0
-  readonly property int channelCount: root.badgesOn ? Model.channelBadgeCount(root.slickState, root.channelBadgeMode) : 0
+  readonly property int channelCount: root.badgesOn ? Model.channelBadgeCount(root.slickState, root.channelBadgeMode, root.channelMentionsOnly) : 0
   readonly property bool anyBadge: root.dmCount > 0 || root.channelCount > 0
   // "Combined" folds both into one badge in the DM color and corner.
   readonly property int combinedCount: root.dmCount + root.channelCount
@@ -614,6 +617,7 @@ BarWidget {
 
       Text {
         id: painted
+        textFormat: Text.PlainText
         anchors.centerIn: parent
         anchors.horizontalCenterOffset: painted.implicitWidth / 2
           - (metrics.tightBoundingRect.x + Math.max(1, metrics.tightBoundingRect.width) / 2)
@@ -724,6 +728,7 @@ BarWidget {
 
     Text {
       id: digits
+      textFormat: Text.PlainText
       anchors.centerIn: parent
       visible: !cornerBadge.dotOnly
       text: Model.badgeLabel(cornerBadge.count)
@@ -752,6 +757,7 @@ BarWidget {
   // shape where it overlaps the mark.
   Text {
     id: mutedMark
+    textFormat: Text.PlainText
     readonly property int size: Math.max(8, Math.round(Style.bar.iconCanvas * 0.6))
     readonly property int corner: Math.round(Style.bar.iconCanvas / 2 - 1)
     visible: root.muted && root.mutedIndicator === "Bell"
@@ -937,6 +943,41 @@ BarWidget {
   }
 
   // ----------------------------------------------------------- preview card
+  FontMetrics {
+    id: messageMetrics
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.bodySmall
+  }
+
+  // A word of a message in the preview (see Model.messageTokens).
+  Component {
+    id: messageWord
+
+    Text {
+      text: parent ? parent.token.html : ""
+      textFormat: Text.StyledText
+      color: Qt.darker(popup.fg, 1.3)
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.bodySmall
+    }
+  }
+
+  // One of the workspace's emoji in a message, from slick's saved copy.
+  Component {
+    id: messageEmoji
+
+    AnimatedImage {
+      readonly property int box: Math.round(messageMetrics.height * 1.1)
+      width: box
+      height: messageMetrics.height
+      source: parent ? parent.token.src : ""
+      playing: parent ? parent.token.animated : false
+      fillMode: Image.PreserveAspectFit
+      asynchronous: true
+      cache: true
+    }
+  }
+
   PopupCard {
     id: popup
     anchorItem: root
@@ -959,6 +1000,7 @@ BarWidget {
       visible: root.notInstalled
 
       Text {
+        textFormat: Text.PlainText
         text: "slick not detected"
         color: popup.fg
         font.family: root.fontFamily
@@ -967,6 +1009,7 @@ BarWidget {
       }
 
       Text {
+        textFormat: Text.PlainText
         width: parent.width
         text: "slick is a fast Slack client for the terminal. Install it with:"
         color: popup.dim
@@ -984,6 +1027,7 @@ BarWidget {
 
         Text {
           id: commandText
+          textFormat: Text.PlainText
           anchors.left: parent.left
           anchors.right: copyHint.left
           anchors.leftMargin: Style.space(8)
@@ -998,6 +1042,7 @@ BarWidget {
 
         Text {
           id: copyHint
+          textFormat: Text.PlainText
           anchors.right: parent.right
           anchors.rightMargin: Style.space(8)
           anchors.verticalCenter: parent.verticalCenter
@@ -1021,6 +1066,7 @@ BarWidget {
         spacing: Style.space(12)
 
         Text {
+          textFormat: Text.PlainText
           text: "Install in terminal"
           color: popup.fg
           font.family: root.fontFamily
@@ -1042,6 +1088,7 @@ BarWidget {
         }
 
         Text {
+          textFormat: Text.PlainText
           text: "slick.leonavas.com"
           color: siteArea.containsMouse ? popup.fg : popup.dim
           font.family: root.fontFamily
@@ -1070,6 +1117,7 @@ BarWidget {
       visible: !root.notInstalled
 
       Text {
+        textFormat: Text.PlainText
         width: parent.width
         text: {
           var team = root.slickState && root.slickState.team ? String(root.slickState.team) : "slick"
@@ -1088,18 +1136,21 @@ BarWidget {
         spacing: Style.space(6)
 
         Text {
+          textFormat: Text.PlainText
           text: "󰂛"
           color: popup.dim
           font.family: root.fontFamily
           font.pixelSize: Style.font.bodySmall
         }
         Text {
+          textFormat: Text.PlainText
           text: root.pauseLabel + " ·"
           color: popup.dim
           font.family: root.fontFamily
           font.pixelSize: Style.font.bodySmall
         }
         Text {
+          textFormat: Text.PlainText
           text: "Resume"
           color: popup.fg
           font.family: root.fontFamily
@@ -1123,9 +1174,10 @@ BarWidget {
       }
 
       Text {
+        textFormat: Text.PlainText
         visible: root.preview.rows.length === 0
-        text: root.totals.channels > 0 && !root.previewChannels
-          ? "No unread DMs or mentions" : "No unread messages"
+        text: root.totals.channelsQuiet > 0 && !root.previewChannels
+          ? (root.totals.quietKnown ? "Nothing that notifies you" : "No unread DMs or mentions") : "No unread messages"
         color: popup.dim
         font.family: root.fontFamily
         font.pixelSize: Style.font.bodySmall
@@ -1161,6 +1213,7 @@ BarWidget {
 
               Text {
                 id: kindText
+                textFormat: Text.PlainText
                 width: convRow.indent
                 text: convRow.modelData.glyph
                 color: convRow.modelData.kind === "dm" || convRow.modelData.kind === "group"
@@ -1174,6 +1227,7 @@ BarWidget {
 
               Text {
                 id: nameText
+                textFormat: Text.PlainText
                 text: convRow.modelData.name
                 color: popup.fg
                 font.family: root.fontFamily
@@ -1203,6 +1257,7 @@ BarWidget {
 
                 Text {
                   id: mentionText
+                  textFormat: Text.PlainText
                   anchors.centerIn: parent
                   visible: marker.hasCount
                   text: Model.badgeLabel(convRow.modelData.mentions)
@@ -1215,6 +1270,7 @@ BarWidget {
 
               Text {
                 id: timeText
+                textFormat: Text.PlainText
                 text: Model.relativeTime(convRow.modelData.latest, root.nowSec)
                 color: popup.dim
                 font.family: root.fontFamily
@@ -1224,17 +1280,37 @@ BarWidget {
               }
             }
 
-            Text {
-              visible: text !== ""
-              text: convRow.modelData.line
+            // Every unread message, up to two lines each, word by word so the
+            // workspace's emoji (GIFs animated) sit inline. Words come from
+            // Model.messageTokens: escaped, with only bold, italic and
+            // strikethrough as markup, and images only from local files.
+            Column {
+              visible: convRow.modelData.messages.length > 0
               x: convRow.indent
               width: convInner.width - x
-              color: Qt.darker(popup.fg, 1.3)
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-              wrapMode: Text.Wrap
-              maximumLineCount: 2
-              elide: Text.ElideRight
+              spacing: Style.space(2)
+
+              Repeater {
+                model: convRow.modelData.messages
+
+                Flow {
+                  id: messageFlow
+                  required property var modelData
+                  width: parent.width
+                  height: Math.min(implicitHeight, Math.ceil(messageMetrics.height * 2))
+                  clip: true
+
+                  Repeater {
+                    model: messageFlow.modelData.tokens
+
+                    Loader {
+                      required property var modelData
+                      readonly property var token: modelData
+                      sourceComponent: modelData.kind === "img" ? messageEmoji : messageWord
+                    }
+                  }
+                }
+              }
             }
           }
 
@@ -1249,12 +1325,19 @@ BarWidget {
       }
 
       Text {
+        textFormat: Text.PlainText
         readonly property var parts: {
           var out = []
           if (root.preview.hidden > 0) out.push("+" + root.preview.hidden + " more")
-          if (!root.previewChannels && root.totals.channels > 0)
-            out.push("+" + root.totals.channels + (root.totals.channels === 1
-              ? " channel with unread messages, no mentions" : " channels with unread messages, no mentions"))
+          var quiet = root.totals.channelsQuiet
+          if (!root.previewChannels && quiet > 0) {
+            if (root.totals.quietKnown)
+              out.push("+" + quiet + (quiet === 1 ? " muted or mentions-only channel unread"
+                                                 : " muted or mentions-only channels unread"))
+            else
+              out.push("+" + quiet + (quiet === 1 ? " channel with unread messages, no mentions"
+                                                 : " channels with unread messages, no mentions"))
+          }
           return out
         }
         visible: parts.length > 0
@@ -1310,6 +1393,7 @@ BarWidget {
 
               Text {
                 id: reactionKind
+                textFormat: Text.PlainText
                 width: reactionRow.indent
                 text: reactionRow.modelData.glyph
                 color: popup.dim
@@ -1346,6 +1430,7 @@ BarWidget {
               }
 
               Text {
+                textFormat: Text.PlainText
                 text: "to your message"
                 color: popup.fg
                 font.family: root.fontFamily
@@ -1360,6 +1445,7 @@ BarWidget {
 
               Text {
                 id: reactionTime
+                textFormat: Text.PlainText
                 text: Model.relativeTime(reactionRow.modelData.latest, root.nowSec)
                 color: popup.dim
                 font.family: root.fontFamily
@@ -1393,6 +1479,7 @@ BarWidget {
       }
 
       Text {
+        textFormat: Text.PlainText
         visible: root.reactions.hidden > 0
         text: "+" + root.reactions.hidden + (root.reactions.hidden === 1 ? " more reaction" : " more reactions")
         color: popup.dim
@@ -1434,6 +1521,7 @@ BarWidget {
 
       Text {
         id: entryText
+        textFormat: Text.PlainText
         anchors.left: parent.left
         anchors.leftMargin: Style.space(8) + entry.indent
         anchors.verticalCenter: parent.verticalCenter
@@ -1444,6 +1532,7 @@ BarWidget {
       }
 
       Text {
+        textFormat: Text.PlainText
         visible: entry.showCheck
         anchors.right: parent.right
         anchors.rightMargin: Style.space(8)
@@ -1490,6 +1579,7 @@ BarWidget {
 
       Text {
         id: backChevron
+        textFormat: Text.PlainText
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
         text: "󰅁"
@@ -1511,6 +1601,7 @@ BarWidget {
 
       Text {
         id: valueText
+        textFormat: Text.PlainText
         anchors.left: backChevron.right
         anchors.right: forwardChevron.left
         anchors.verticalCenter: parent.verticalCenter
@@ -1524,6 +1615,7 @@ BarWidget {
 
       Text {
         id: forwardChevron
+        textFormat: Text.PlainText
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         text: "󰅂"
@@ -1635,6 +1727,16 @@ BarWidget {
         }
 
         MenuEntry {
+          label: "Channel mentions only"
+          showCheck: true
+          checked: root.channelMentionsOnly
+          onActivated: {
+            root.close()
+            root.writeSetting("channelMentionsOnly", !root.channelMentionsOnly)
+          }
+        }
+
+        MenuEntry {
           label: "Show reactions"
           showCheck: true
           checked: root.showReactions
@@ -1715,6 +1817,7 @@ BarWidget {
               onStepped: function (delta) { root.stepPickerHour(delta) }
             }
             Text {
+              textFormat: Text.PlainText
               anchors.verticalCenter: parent.verticalCenter
               text: ":"
               color: menu.fg

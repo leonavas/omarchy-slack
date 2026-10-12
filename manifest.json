@@ -36,7 +36,7 @@
       "badgeLayout": "Split",
       "dmColor": "#b65f4e",
       "channelColor": "#467996",
-      "channelBadge": "Mentions",
+      "channelBadge": "Unread",
       "badgeScale": 0.45,
       "tintWhenUnread": false,
       "hideMode": "Special workspace",
@@ -51,6 +51,7 @@
       "previewRows": 6,
       "previewChannels": false,
       "showReactions": true,
+      "channelMentionsOnly": false,
       "mutedIndicator": "Bell"
     },
     "schema": [
@@ -150,12 +151,13 @@
         "type": "enum",
         "label": "Channel badge counts",
         "options": [
+          "Unread",
           "Mentions",
           "All unread",
           "None"
         ],
-        "defaultValue": "Mentions",
-        "description": "Mentions counts messages that mention you in channels. All unread adds the unread channels without a mention. None drops the channel badge."
+        "defaultValue": "Unread",
+        "description": "Unread counts the messages that mention you plus the unread channels that notify you: not muted and not set to mentions only in Slack. Mentions counts only the mentions. All unread adds every unread channel. None drops the channel badge."
       },
       {
         "key": "badgeScale",
@@ -251,7 +253,14 @@
         "type": "boolean",
         "label": "Preview every unread channel",
         "defaultValue": false,
-        "description": "Off, the preview lists DMs, group DMs and channels that mention you, and only counts the rest. On, every unread channel gets a row."
+        "description": "Off, the preview lists DMs, group DMs, channels that mention you and channels that notify you, and only counts the muted or mentions-only ones. On, every unread channel gets a row."
+      },
+      {
+        "key": "channelMentionsOnly",
+        "type": "boolean",
+        "label": "Channel mentions only",
+        "defaultValue": false,
+        "description": "On, a channel only gets a row and counts in the blue badge when it mentions you; every other unread channel only counts in the preview's footer. Off, channels that notify you (not muted, not set to mentions only in Slack) count too. The icon's menu toggles this as \"Channel mentions only\"."
       },
       {
         "key": "showReactions",

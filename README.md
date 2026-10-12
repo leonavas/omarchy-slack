@@ -12,12 +12,16 @@ slick is a fast, lightweight Slack client for the terminal, written in Rust
 - **Icon.** slick's mark in the bar (white with a faint outline by default,
   readable on light and dark bars). It is dimmed while slick is not running.
 - **Badges.** Red at the bottom-right counts unread messages in DMs and group
-  DMs. Blue at the top-right counts messages that mention you in channels. A
-  badge with nothing to count is not drawn.
+  DMs. Blue at the top-right counts channel mentions and the unread channels
+  that notify you. A channel you muted or set to mentions only in Slack only
+  counts in the preview's footer. "Channel mentions only" in the menu narrows
+  the blue badge and the rows to channels that mention you. A badge with
+  nothing to count is not drawn.
 - **Combined mode.** "Group notifications" in the menu folds both into one
   red badge with their sum.
-- **Hover preview.** Hover the icon to see the unread conversations: who, the
-  last message ("Ana: can you review the PR?"), mention count and how long ago.
+- **Hover preview.** Hover the icon to see the unread conversations: who, their
+  unread messages ("Ana: can you review the PR?") with Slack's bold and italic
+  and the workspace's own emoji (GIFs animated), mention count and how long ago.
   Click a conversation to jump straight to it in slick. Below them, the
   reactions people put on your messages ("Ana reacted 👍 to your message"),
   which never add to the badges.
@@ -28,7 +32,7 @@ slick is a fast, lightweight Slack client for the terminal, written in Rust
   click shows it, another click puts it away without closing it, so it keeps
   running and counting.
 - **Menu (right click).** Launch on Login, Launch in Foreground, Open in
-  Scratchpad, Group notifications, Show reactions, pause notifications (30 minutes, 1 hour,
+  Scratchpad, Group notifications, Channel mentions only, Show reactions, pause notifications (30 minutes, 1 hour,
   2 hours, until tomorrow, or until a day and time you pick) or resume them,
   and Quit slick.
 - **Pause notifications** uses Slack's own do-not-disturb, so the pause
@@ -85,7 +89,7 @@ in `~/.config/omarchy/shell.json`, e.g.
 | `badgeLayout` | `Split` | `Split` (red DMs + blue channels) or `Combined` (one red badge) |
 | `dmColor` | `#b65f4e` | DM badge color |
 | `channelColor` | `#467996` | Channel badge color |
-| `channelBadge` | `Mentions` | What the blue badge counts: `Mentions`, `All unread` or `None` |
+| `channelBadge` | `Unread` | What the blue badge counts: `Unread` (mentions and channels that notify you), `Mentions`, `All unread` or `None` |
 | `badgeScale` | `0.45` | Dot size, as a fraction of the icon |
 | `tintWhenUnread` | `false` | Color the mark too (`Mono` and `Glyph` styles) |
 | `hideMode` | `Special workspace` | What a click on the open window does: park it, or `Never hide` |
@@ -98,7 +102,8 @@ in `~/.config/omarchy/shell.json`, e.g.
 | `middleClickCloses` | `true` | Middle click quits slick |
 | `hoverPreview` | `true` | Show the preview on hover |
 | `previewRows` | `6` | Conversations in the preview, and reactions below them |
-| `previewChannels` | `false` | Also list unread channels without a mention |
+| `channelMentionsOnly` | `false` | Channels count only when they mention you: no row or blue badge for the ones that notify you |
+| `previewChannels` | `false` | Also list muted and mentions-only channels |
 | `showReactions` | `true` | List reactions to your messages and float new ones out of the icon |
 | `mutedIndicator` | `Bell` | While paused: `Bell`, `Dim` or `None` |
 
