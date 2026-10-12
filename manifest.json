@@ -1,0 +1,269 @@
+{
+  "schemaVersion": 1,
+  "id": "leonavas.slick",
+  "name": "slick",
+  "version": "1.0.0",
+  "author": "leonavas",
+  "license": "MIT",
+  "description": "slick, the Slack TUI, as a bar icon: opens it, parks it out of sight, badges unread DMs and channel mentions, previews them on hover and pauses notifications.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Slick.qml"
+  },
+  "barWidget": {
+    "displayName": "slick",
+    "description": "slick as a tray icon: click to show or hide the window, red and blue badges for unread DMs and channel mentions, a preview of them on hover.",
+    "category": "Status",
+    "aliases": [
+      "slick",
+      "slack",
+      "chat",
+      "messages",
+      "tray"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "launchCommand": "",
+      "windowClass": "org.omarchy.slick",
+      "iconStyle": "Outline",
+      "glyph": "󰒱",
+      "glyphSize": 0,
+      "glyphOffsetY": 0,
+      "badge": "Count",
+      "badgeLayout": "Split",
+      "dmColor": "#b65f4e",
+      "channelColor": "#467996",
+      "channelBadge": "Mentions",
+      "badgeScale": 0.45,
+      "tintWhenUnread": false,
+      "hideMode": "Special workspace",
+      "specialWorkspace": "scratchpad",
+      "openInSpecial": true,
+      "autoStart": false,
+      "launchForeground": false,
+      "dimWhenClosed": true,
+      "hideWhenNotRunning": false,
+      "middleClickCloses": true,
+      "hoverPreview": true,
+      "previewRows": 6,
+      "previewChannels": false,
+      "mutedIndicator": "Bell"
+    },
+    "schema": [
+      {
+        "key": "launchCommand",
+        "type": "string",
+        "label": "Custom launch command",
+        "defaultValue": "",
+        "description": "Left empty, the widget runs `omarchy-launch-tui --app-id=<window class> slick`, or `xdg-terminal-exec --app-id=<window class> -e slick` where that helper is missing. Whatever you set here must open a window with the class below."
+      },
+      {
+        "key": "windowClass",
+        "type": "string",
+        "label": "Window class to watch",
+        "defaultValue": "org.omarchy.slick",
+        "description": "Matched exactly (case-insensitive). Also the app id the default launch command gives the terminal."
+      },
+      {
+        "key": "iconStyle",
+        "type": "enum",
+        "label": "Icon",
+        "options": [
+          "Outline",
+          "Color",
+          "Mono",
+          "Glyph"
+        ],
+        "defaultValue": "Outline",
+        "description": "Outline draws slick's white mark with a faint dark edge, readable on light and dark bars. Color draws the colored mark. Mono draws the white mark tinted with the bar's color. Glyph draws any Nerd Font character instead."
+      },
+      {
+        "key": "glyph",
+        "type": "string",
+        "label": "Glyph",
+        "defaultValue": "󰒱",
+        "description": "Only used by the Glyph style."
+      },
+      {
+        "key": "glyphSize",
+        "type": "integer",
+        "label": "Glyph size (px)",
+        "min": 0,
+        "max": 32,
+        "step": 1,
+        "defaultValue": 0,
+        "description": "0 follows the bar's icon size. Only used by the Glyph style."
+      },
+      {
+        "key": "glyphOffsetY",
+        "type": "number",
+        "label": "Vertical nudge (px)",
+        "min": -6,
+        "max": 6,
+        "step": 0.5,
+        "defaultValue": 0,
+        "description": "Negative moves the glyph up, for glyphs whose ink sits off the bar's line."
+      },
+      {
+        "key": "badge",
+        "type": "enum",
+        "label": "Unread badge",
+        "options": [
+          "Count",
+          "Dot",
+          "None"
+        ],
+        "defaultValue": "Count",
+        "description": "Two badges at once: unread DM and group DM messages at the bottom-right in red, channel mentions at the top-right in blue. A badge with nothing to count is not drawn. Dot marks the same corners without numbers."
+      },
+      {
+        "key": "badgeLayout",
+        "type": "enum",
+        "label": "Badge layout",
+        "options": [
+          "Split",
+          "Combined"
+        ],
+        "defaultValue": "Split",
+        "description": "Split shows DMs (red, bottom-right) and channels (blue, top-right) as two badges. Combined shows one red badge, bottom-right, with their sum. The icon's menu toggles this as \"Group notifications\"."
+      },
+      {
+        "key": "dmColor",
+        "type": "string",
+        "label": "DM badge color",
+        "defaultValue": "#b65f4e",
+        "description": "Bottom-right badge: unread messages in DMs and group DMs. slick's red. Empty follows the theme's urgent color."
+      },
+      {
+        "key": "channelColor",
+        "type": "string",
+        "label": "Channel badge color",
+        "defaultValue": "#467996",
+        "description": "Top-right badge: channel messages. slick's blue. Empty follows the theme's urgent color."
+      },
+      {
+        "key": "channelBadge",
+        "type": "enum",
+        "label": "Channel badge counts",
+        "options": [
+          "Mentions",
+          "All unread",
+          "None"
+        ],
+        "defaultValue": "Mentions",
+        "description": "Mentions counts messages that mention you in channels. All unread adds the unread channels without a mention. None drops the channel badge."
+      },
+      {
+        "key": "badgeScale",
+        "type": "number",
+        "label": "Dot size",
+        "min": 0.2,
+        "max": 0.9,
+        "step": 0.05,
+        "defaultValue": 0.45,
+        "description": "The dot's diameter as a fraction of the icon. Only used by the Dot badge."
+      },
+      {
+        "key": "tintWhenUnread",
+        "type": "boolean",
+        "label": "Color the icon while something is waiting",
+        "defaultValue": false,
+        "description": "Mono and Glyph styles only: the mark takes the DM color, or the channel color when only channels are waiting."
+      },
+      {
+        "key": "hideMode",
+        "type": "enum",
+        "label": "What a click on the open window does",
+        "options": [
+          "Special workspace",
+          "Never hide"
+        ],
+        "defaultValue": "Special workspace",
+        "description": "Special workspace parks the window in a hidden Hyprland special workspace, where slick keeps running and counting."
+      },
+      {
+        "key": "specialWorkspace",
+        "type": "string",
+        "label": "Name of the special workspace",
+        "defaultValue": "scratchpad",
+        "description": "Used as special:<name>. \"scratchpad\" is Omarchy's own, toggled with SUPER+S."
+      },
+      {
+        "key": "openInSpecial",
+        "type": "boolean",
+        "label": "Open straight into the special workspace",
+        "defaultValue": true,
+        "description": "Every new slick window moves to special:<name>, and a click shows or hides that workspace. The icon's menu toggles this as \"Open in Scratchpad\"."
+      },
+      {
+        "key": "autoStart",
+        "type": "boolean",
+        "label": "Open slick when the shell starts",
+        "defaultValue": false,
+        "description": "The icon's menu toggles this as \"Launch on Login\"."
+      },
+      {
+        "key": "launchForeground",
+        "type": "boolean",
+        "label": "Show and focus slick when it opens on its own",
+        "defaultValue": false,
+        "description": "Applies to launches the widget did not click into being (login, a terminal). A click on the icon always shows the window it opens. The icon's menu toggles this as \"Launch in Foreground\"."
+      },
+      {
+        "key": "dimWhenClosed",
+        "type": "boolean",
+        "label": "Dim the icon while slick is not running",
+        "defaultValue": true
+      },
+      {
+        "key": "hideWhenNotRunning",
+        "type": "boolean",
+        "label": "Remove the icon from the bar while slick is not running",
+        "defaultValue": false
+      },
+      {
+        "key": "middleClickCloses",
+        "type": "boolean",
+        "label": "Middle click quits slick",
+        "defaultValue": true
+      },
+      {
+        "key": "hoverPreview",
+        "type": "boolean",
+        "label": "Preview unread conversations on hover",
+        "defaultValue": true
+      },
+      {
+        "key": "previewRows",
+        "type": "integer",
+        "label": "Conversations shown in the preview",
+        "min": 1,
+        "max": 20,
+        "step": 1,
+        "defaultValue": 6
+      },
+      {
+        "key": "previewChannels",
+        "type": "boolean",
+        "label": "Preview every unread channel",
+        "defaultValue": false,
+        "description": "Off, the preview lists DMs, group DMs and channels that mention you, and only counts the rest. On, every unread channel gets a row."
+      },
+      {
+        "key": "mutedIndicator",
+        "type": "enum",
+        "label": "While notifications are paused",
+        "options": [
+          "Bell",
+          "Dim",
+          "None"
+        ],
+        "defaultValue": "Bell",
+        "description": "A pause you set hides both badges. Bell fades the mark and puts a small bell-off in the bottom-right corner, Dim fades the whole icon, None shows nothing. Slack's scheduled night-time DND keeps the badges."
+      }
+    ]
+  }
+}
