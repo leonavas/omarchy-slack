@@ -110,8 +110,52 @@ BarWidget {
     if (!root.running) return
     // A new slick window goes straight to the special workspace. `settled`
     // keeps a shell restart from yanking one that is already open.
-    if (root.openInSpecial && settleTimer.settled) root.placeInSpecial()
+    if (root.openInSpecial && settleTimer.settled) {
+      root.placeInSpecial()
+      if (!root.launchForeground) {
+        backgroundFixTimer.focusTarget = root.lastOtherAddress
+        backgroundFixTimer.restart()
+      }
+    }
     if (root.launchForeground && settleTimer.settled) foregroundTimer.restart()
+  }
+
+  // Moving a just-opened window into the special workspace makes Hyprland
+  // refocus, and its pick can be a window that lives in the scratchpad (or the
+  // moved one itself), which opens the scratchpad on screen: "silent" does not
+  // cover that. A background launch then puts things back: scratchpad hidden,
+  // focus on the window you were using. Checked against hyprctl rather than
+  // the cached monitor state, which lags the events by a beat.
+  property string lastOtherAddress: ""
+  Connections {
+    target: Hyprland
+    function onActiveToplevelChanged() { root.noteActive() }
+  }
+  function noteActive() {
+    var t = Hyprland.activeToplevel
+    if (!t || !t.address) return
+    if (Model.classOf(t).toLowerCase() === root.windowClass.toLowerCase()) return
+    if (Model.workspaceName(t).indexOf("special:") === 0) return
+    var value = String(t.address)
+    if (value.indexOf("0x") !== 0) value = "0x" + value
+    root.lastOtherAddress = "address:" + value
+  }
+  Timer {
+    id: backgroundFixTimer
+    property string focusTarget: ""
+    interval: 200
+    onTriggered: {
+      var lua = Hyprland.usingLua === true
+      var hide = lua ? 'hl.dsp.workspace.toggle_special("' + root.specialName + '")'
+                     : "togglespecialworkspace " + root.specialName
+      var focus = focusTarget.length === 0 ? ""
+        : lua ? 'hl.dsp.focus({ window = "' + focusTarget + '" })' : "focuswindow " + focusTarget
+      Util.execArgv(["bash", "-c",
+        'shown=$(hyprctl monitors -j | jq -r \'.[] | select(.focused) | .specialWorkspace.name\'); '
+        + '[ "$shown" = "special:$1" ] && hyprctl dispatch "$2" >/dev/null; '
+        + '[ -n "$3" ] && hyprctl dispatch "$3" >/dev/null; exit 0',
+        "slick-background", root.specialName, hide, focus])
+    }
   }
 
   Timer {
@@ -181,17 +225,17 @@ BarWidget {
   }
 
   // omarchy-launch-tui names the window org.omarchy.<command>, which is the
-  // class this widget watches. The launch goes through Hyprland with window
-  // rules, so a slick headed for the scratchpad is born there: it never
-  // flashes on the current workspace or takes the focus on its way out, which
-  // would also tell slick its open conversation was seen. Launch in
-  // Foreground then shows it (onRunningChanged), however it was launched.
+  // class this widget watches. The window opens on the current workspace:
+  // Ghostty only starts the command once its window is shown, so a terminal
+  // born in the hidden scratchpad would never run slick. With Launch in
+  // Foreground off it opens without taking the focus, and onRunningChanged
+  // then moves it silently to the scratchpad (a brief flash, no focus
+  // steal); with it on, onRunningChanged shows it there.
   function launch() {
     var cmd = root.launchCommand.length > 0 ? root.launchCommand
                                             : "omarchy-launch-tui --app-id=" + root.windowClass + " slick"
     var lua = {}
-    if (root.openInSpecial) lua.workspace = "special:" + root.specialName + " silent"
-    if (root.openInSpecial || !root.launchForeground) lua.no_initial_focus = true
+    if (!root.launchForeground) lua.no_initial_focus = true
     if (Hyprland.usingLua === true) {
       var rules = Object.keys(lua).map(function (k) {
         return k + " = " + (typeof lua[k] === "string" ? Model.luaString(lua[k]) : String(lua[k]))
@@ -199,7 +243,6 @@ BarWidget {
       Util.execArgv(["hyprctl", "eval", "hl.exec_cmd(" + Model.luaString(cmd) + ", { " + rules.join(", ") + " })"])
     } else {
       var legacy = []
-      if (lua.workspace) legacy.push("workspace " + lua.workspace)
       if (lua.no_initial_focus) legacy.push("noinitialfocus")
       Util.execArgv(["hyprctl", "dispatch", "exec", (legacy.length > 0 ? "[" + legacy.join(";") + "] " : "") + cmd])
     }

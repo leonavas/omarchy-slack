@@ -42,13 +42,28 @@ same way the shell's tray tints symbolic icons.
 ## Launching
 
 Every launch, from a click, the menu or login, follows `launchForeground`.
-It goes through Hyprland with window rules (`hl.exec_cmd(cmd, { workspace =
-"special:scratchpad silent", no_initial_focus = true })` on Lua configs, the
-`[workspace …;noinitialfocus]` prefix on older ones), so a slick meant for the
-background is born in the scratchpad. Moving it there after it appeared made it
-flash on the current workspace and take the focus on the way, and that focus
-also told slick its open conversation had been seen and could be marked read.
-Launch in Foreground shows it once it is there.
+slick cannot be born in the scratchpad: Ghostty does not start a window's
+command until that window is first shown on screen, so a terminal created in
+a hidden special workspace sits there titled "Ghostty" and slick only starts
+once the scratchpad is opened.
+
+So the window opens on the current workspace. With Launch in Foreground off
+it opens with `no_initial_focus` (`hl.exec_cmd(cmd, { no_initial_focus = true
+})` on Lua configs, `[noinitialfocus] cmd` on older ones): it flashes there
+briefly without taking the focus, which matters because focusing slick tells
+it the open conversation was seen and can be marked read. `onRunningChanged`
+then moves it silently into the scratchpad (`placeInSpecial`), or, with Launch
+in Foreground on, shows it there. Both wait for `settled`, so a shell restart
+never moves a slick that was already open.
+
+"Silent" is not enough there. Moving a window that just opened makes Hyprland
+refocus, and it may pick a window that lives in the scratchpad (another app
+parked there, or slick itself), which opens the scratchpad on screen. So a
+background launch checks 200 ms later with `hyprctl monitors -j`: if the
+scratchpad is showing it is hidden again and the focus goes back to the last
+regular window you used. Measured: the window and the scratchpad flash for
+about 200 ms, and slick is running in the hidden scratchpad well within a
+second.
 
 ## Opening a conversation
 
