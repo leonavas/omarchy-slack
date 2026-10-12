@@ -763,6 +763,22 @@ BarWidget {
     }
   }
 
+  // A count centred on its pill by the ink of its digits, not by their
+  // advance: in a monospace font a digit sits off-centre in its cell, and at
+  // badge size the pixel or so that leaves shows.
+  component CountText: Text {
+    id: countText
+    TextMetrics {
+      id: ink
+      font: countText.font
+      text: countText.text
+    }
+    readonly property rect inkBox: ink.tightBoundingRect
+    textFormat: Text.PlainText
+    x: Math.round((parent.width - inkBox.width) / 2 - inkBox.x)
+    y: Math.round((parent.height - inkBox.height) / 2 - (baselineOffset + inkBox.y))
+  }
+
   // A small count pill on one corner of the icon canvas. A dot fits inside
   // the canvas; a count is nearly as tall as the canvas, so it is centred on
   // the corner instead, out into the slot's padding, like a tray badge.
@@ -795,10 +811,8 @@ BarWidget {
     anchors.verticalCenter: parent.verticalCenter
     anchors.verticalCenterOffset: sy * Math.min(reachY, maxY)
 
-    Text {
+    CountText {
       id: digits
-      textFormat: Text.PlainText
-      anchors.centerIn: parent
       visible: !cornerBadge.dotOnly
       text: Model.badgeLabel(cornerBadge.count)
       color: root.badgeDigitColor
@@ -1259,10 +1273,8 @@ BarWidget {
                 anchors.rightMargin: timeText.text !== "" ? Style.space(8) : 0
                 anchors.verticalCenter: nameText.verticalCenter
 
-                Text {
+                CountText {
                   id: mentionText
-                  textFormat: Text.PlainText
-                  anchors.centerIn: parent
                   visible: marker.hasCount
                   text: Model.badgeLabel(convRow.modelData.mentions)
                   color: root.badgeDigitColor
@@ -1426,10 +1438,8 @@ BarWidget {
                 anchors.rightMargin: threadTime.text !== "" ? Style.space(8) : 0
                 anchors.verticalCenter: threadName.verticalCenter
 
-                Text {
+                CountText {
                   id: threadCount
-                  textFormat: Text.PlainText
-                  anchors.centerIn: parent
                   visible: threadMarker.hasCount
                   text: Model.badgeLabel(threadRow.modelData.count)
                   color: root.badgeDigitColor

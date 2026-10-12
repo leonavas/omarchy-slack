@@ -56,10 +56,21 @@ slick is a fast, lightweight Slack client for the terminal, written in Rust
 ## Requirements
 
 - Omarchy, with its shell (the Quickshell bar).
-- slick installed and on your `PATH`: get it at
-  [slick.leonavas.com](https://slick.leonavas.com).
+- [slick](https://slick.leonavas.com), installed on its own (step 1 below).
 
 ## Install
+
+The widget is the bar side of slick: it needs slick installed first. On its
+own it only shows a dimmed icon whose card points to slick's install page.
+
+**1. Install slick.** Follow
+[slick.leonavas.com/#install](https://slick.leonavas.com/#install): one
+command, no sudo. It downloads the latest release for your architecture,
+checks its SHA-256 and puts `slick` in `~/.local/bin`. Prefer to build it?
+The [slick README](https://github.com/leonavas/slick#install) has the source
+route. Then run `slick` once in a terminal to sign in to your workspace.
+
+**2. Add the widget.**
 
 ```bash
 omarchy plugin add https://github.com/leonavas/omarchy-slack.git
