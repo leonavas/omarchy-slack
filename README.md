@@ -1,11 +1,17 @@
 # Slack for the Omarchy bar
 
+> [!IMPORTANT]
+> **Requires slick**, the Slack client for the terminal this widget drives.
+> Install it first: [slick.leonavas.com/#install](https://slick.leonavas.com/#install)
+> (one command, no sudo) or from [source](https://github.com/leonavas/slick).
+> Then add the widget ([Install](#install)).
+
 ![Slack in the Omarchy bar: badges, the hover list, the menu and reactions floating up](preview.png)
 
 A bar widget for [Omarchy](https://omarchy.org) that puts Slack in your bar
-the way a tray icon would, through [slick](https://slick.leonavas.com).
-slick is a fast, lightweight Slack client for the terminal, written in Rust
-([source](https://github.com/leonavas/slick)).
+the way a tray icon would, through [slick](https://slick.leonavas.com), a
+fast, lightweight Slack client for the terminal, written in Rust
+([github.com/leonavas/slick](https://github.com/leonavas/slick)).
 
 ## What it does
 
@@ -56,7 +62,7 @@ slick is a fast, lightweight Slack client for the terminal, written in Rust
 ## Requirements
 
 - Omarchy, with its shell (the Quickshell bar).
-- [slick](https://slick.leonavas.com), installed on its own (step 1 below).
+- [slick](https://slick.leonavas.com) ([source](https://github.com/leonavas/slick)), installed on its own (step 1 below).
 
 ## Install
 
