@@ -464,11 +464,10 @@ BarWidget {
   // ---------------------------------------------------------- not installed
   //
   // Without a `slick` on PATH the widget turns into a way to get it: a dimmed
-  // mark, and a card with the install command. Assumed installed until the
+  // mark, and a card with a link to slick's site, which has the install steps. Assumed installed until the
   // first check says otherwise, so the bar does not flash the empty state at
   // login; re-checked every 30 s while missing, so an install is picked up
   // without restarting the shell.
-  readonly property string installCommand: "curl -fsSL https://slick.leonavas.com/install.sh | sh"
   readonly property string websiteUrl: "https://slick.leonavas.com"
   property bool installed: true
   readonly property bool notInstalled: !root.installed && !root.running
@@ -489,21 +488,6 @@ BarWidget {
     onTriggered: root.checkInstalled()
   }
 
-  property bool copied: false
-  Timer {
-    id: copiedTimer
-    interval: 1500
-    onTriggered: root.copied = false
-  }
-  function copyInstallCommand() {
-    Util.execArgv(["wl-copy", root.installCommand])
-    root.copied = true
-    copiedTimer.restart()
-  }
-  function installInTerminal() {
-    Util.execArgv(["omarchy-launch-tui", "--app-id=org.omarchy.slick-install", "bash", "-c",
-      root.installCommand + '; echo; read -n1 -rsp "Press any key to close"'])
-  }
   function openWebsite() { Util.execArgv(["xdg-open", root.websiteUrl]) }
 
   // `slick dnd` talks to Slack itself, so pausing works with slick closed.
@@ -1011,81 +995,15 @@ BarWidget {
       Text {
         textFormat: Text.PlainText
         width: parent.width
-        text: "slick is a fast Slack client for the terminal. Install it with:"
+        text: "slick is a fast Slack client for the terminal. Get it at:"
         color: popup.dim
         wrapMode: Text.Wrap
         font.family: root.fontFamily
         font.pixelSize: Style.font.bodySmall
       }
 
-      // The command, in a box; a click copies it.
-      Rectangle {
-        width: parent.width
-        height: commandText.implicitHeight + Style.space(14)
-        radius: Style.spacing.labelGap
-        color: Qt.rgba(popup.fg.r, popup.fg.g, popup.fg.b, copyArea.containsMouse ? 0.14 : 0.08)
-
-        Text {
-          id: commandText
-          textFormat: Text.PlainText
-          anchors.left: parent.left
-          anchors.right: copyHint.left
-          anchors.leftMargin: Style.space(8)
-          anchors.rightMargin: Style.space(8)
-          anchors.verticalCenter: parent.verticalCenter
-          text: root.installCommand
-          color: popup.fg
-          wrapMode: Text.WrapAnywhere
-          font.family: "monospace"
-          font.pixelSize: Style.font.caption
-        }
-
-        Text {
-          id: copyHint
-          textFormat: Text.PlainText
-          anchors.right: parent.right
-          anchors.rightMargin: Style.space(8)
-          anchors.verticalCenter: parent.verticalCenter
-          text: root.copied ? "Copied" : "Copy"
-          color: root.copied ? popup.fg : popup.dim
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-          font.bold: root.copied
-        }
-
-        MouseArea {
-          id: copyArea
-          anchors.fill: parent
-          hoverEnabled: true
-          cursorShape: Qt.PointingHandCursor
-          onClicked: root.copyInstallCommand()
-        }
-      }
-
       Row {
         spacing: Style.space(12)
-
-        Text {
-          textFormat: Text.PlainText
-          text: "Install in terminal"
-          color: popup.fg
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.bodySmall
-          font.bold: true
-          font.underline: installArea.containsMouse
-
-          MouseArea {
-            id: installArea
-            anchors.fill: parent
-            anchors.margins: -Style.space(3)
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-              root.popupOpen = false
-              root.installInTerminal()
-            }
-          }
-        }
 
         Text {
           textFormat: Text.PlainText
@@ -1641,22 +1559,7 @@ BarWidget {
       anchors.fill: parent
       spacing: Style.space(2)
 
-      // slick not installed: only the ways to get it.
-      MenuEntry {
-        visible: root.notInstalled
-        label: root.copied ? "Copied" : "Copy install command"
-        onActivated: root.copyInstallCommand()
-      }
-
-      MenuEntry {
-        visible: root.notInstalled
-        label: "Install in terminal"
-        onActivated: {
-          root.close()
-          root.installInTerminal()
-        }
-      }
-
+      // slick not installed: only the way to get it.
       MenuEntry {
         visible: root.notInstalled
         label: "Open slick.leonavas.com"

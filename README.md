@@ -1,6 +1,6 @@
 # Slack for the Omarchy bar
 
-![Slack in the Omarchy bar: badges, the hover list, the menu and reactions floating up](docs/screenshot.png)
+![Slack in the Omarchy bar: badges, the hover list, the menu and reactions floating up](preview.png)
 
 A bar widget for [Omarchy](https://omarchy.org) that puts Slack in your bar
 the way a tray icon would, through [slick](https://slick.leonavas.com).
@@ -40,7 +40,7 @@ slick is a fast, lightweight Slack client for the terminal, written in Rust
   While a pause you set is on, the badges give way to a small bell-off mark.
   Slack's scheduled night-time DND keeps the badges.
 - **Not installed?** Without slick on your `PATH`, the icon dims and its card
-  shows the install command, with buttons to copy it or run it in a terminal.
+  links to [slick.leonavas.com](https://slick.leonavas.com), where to get it.
   The widget picks slick up on its own once installed.
 
 | Mouse | Action |
@@ -53,13 +53,8 @@ slick is a fast, lightweight Slack client for the terminal, written in Rust
 ## Requirements
 
 - Omarchy, with its shell (the Quickshell bar).
-- slick installed and on your `PATH`:
-
-  ```bash
-  curl -fsSL https://slick.leonavas.com/install.sh | sh
-  ```
-
-  See [slick.leonavas.com](https://slick.leonavas.com) for details.
+- slick installed and on your `PATH`: get it at
+  [slick.leonavas.com](https://slick.leonavas.com).
 
 ## Install
 
@@ -70,6 +65,17 @@ omarchy plugin enable leonavas.slack --section right
 
 To update later: `omarchy plugin update leonavas.slack`, then
 `omarchy restart shell`.
+
+## Remove
+
+```bash
+omarchy plugin remove leonavas.slack
+```
+
+It unloads the widget from the bar and deletes the plugin folder. The plugin
+writes nothing outside its entry in `~/.config/omarchy/shell.json`. slick
+itself stays installed; see [slick.leonavas.com](https://slick.leonavas.com)
+to remove it.
 
 ## Settings
 
